@@ -439,7 +439,7 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
             const SizedBox(width: 8),
             Padding(
               padding: const EdgeInsets.only(bottom: 14),
-              child: PillButton(label: 'Find', loading: _searching, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13), onPressed: _doSearch),
+              child: PillButton(label: 'Find', loading: _searching, padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13), onPressed: _doSearch, expand: false), //Modified By Nikhil 22Nov26 16:52 For white screen (full-width button in a Row). Old: no expand: false
             ),
           ],
         ),

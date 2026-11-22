@@ -724,7 +724,7 @@ class _AddStaffScreenState extends State<_AddStaffScreen> {
               const SizedBox(width: 8),
               Padding(
                 padding: const EdgeInsets.only(bottom: 14),
-                child: PillButton(label: 'Find', padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13), onPressed: _find),
+                child: PillButton(label: 'Find', padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13), onPressed: _find, expand: false), //Modified By Nikhil 22Nov26 16:52 For white screen (full-width button in a Row). Old: no expand: false
               ),
             ],
           ),

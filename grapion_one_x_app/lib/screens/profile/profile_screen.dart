@@ -27,11 +27,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _lastCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _mobileCtrl = TextEditingController();
-  final _detailsPwdCtrl = TextEditingController();
-  // Change password
-  final _curPwdCtrl = TextEditingController();
-  final _newPwdCtrl = TextEditingController();
-  final _newPwd2Ctrl = TextEditingController();
+  //Removed By Nikhil 22Nov26 16:52 For password asked in a dialog on Save: final _detailsPwdCtrl = TextEditingController();
+  //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page: final _curPwdCtrl, _newPwdCtrl, _newPwd2Ctrl = TextEditingController();
+  String _savedDetails = ''; //Added By Nikhil 22Nov26 16:52 For "No changes to save" (details as last loaded / saved)
 
   List<Country> _countries = const [];
   Country? _country;
@@ -45,11 +43,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _loading = true;
   bool _savingDetails = false;
-  bool _savingPassword = false;
+  //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page: bool _savingPassword = false;
   String? _detailsMsg;
   bool _detailsOk = false;
-  String? _passwordMsg;
-  bool _passwordOk = false;
+  //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page: String? _passwordMsg; bool _passwordOk = false;
   String? _loadError;
 
   @override
@@ -60,7 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
-    for (final c in [_firstCtrl, _lastCtrl, _emailCtrl, _mobileCtrl, _detailsPwdCtrl, _curPwdCtrl, _newPwdCtrl, _newPwd2Ctrl]) {
+    for (final c in [_firstCtrl, _lastCtrl, _emailCtrl, _mobileCtrl]) { //Modified By Nikhil 22Nov26 16:52 For password fields moved out. Old: [..., _detailsPwdCtrl, _curPwdCtrl, _newPwdCtrl, _newPwd2Ctrl]
       c.dispose();
     }
     super.dispose();
@@ -103,6 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _openCancels = r[4].statusCode == 200
             ? ((jsonDecode(r[4].body)['open'] as List?) ?? []).cast<Map<String, dynamic>>()
             : [];
+        _savedDetails = _detailsKey(); //Added By Nikhil 22Nov26 16:52 For "No changes to save"
         _loading = false;
       });
     } catch (_) {
@@ -124,21 +122,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  //Added By Nikhil 22Nov26 16:52 For "No changes to save" START
+  String _detailsKey() => [_firstCtrl.text.trim(), _lastCtrl.text.trim(), _emailCtrl.text.trim().toLowerCase(), _country?.code ?? '',
+        _mobileCtrl.text.replaceAll(' ', '')].join('|');
+  //Added By Nikhil 22Nov26 16:52 For "No changes to save" END
+
   Future<void> _saveDetails() async {
-    if (_detailsPwdCtrl.text.isEmpty) {
+    //Modified By Nikhil 22Nov26 16:52 For password asked in a dialog on Save. Old: if (_detailsPwdCtrl.text.isEmpty) { _detailsMsg = 'Enter your current password to save changes.'; return; }
+    if (_detailsKey() == _savedDetails) {
       setState(() {
-        _detailsMsg = 'Enter your current password to save changes.';
+        _detailsMsg = 'No changes to save.';
         _detailsOk = false;
       });
       return;
     }
+    final password = await showDialog<String>(context: context, builder: (_) => const _ConfirmPasswordDialog());
+    if (password == null || password.isEmpty || !mounted) return;
     setState(() {
       _savingDetails = true;
       _detailsMsg = null;
     });
     try {
       final res = await apiClient.put('/auth/me/profile', {
-        'current_password': _detailsPwdCtrl.text,
+        'current_password': password, //Modified By Nikhil 22Nov26 16:52 For password from the dialog. Old: _detailsPwdCtrl.text,
         'first_name': _firstCtrl.text.trim(),
         'last_name': _lastCtrl.text.trim(),
         'email': _emailCtrl.text.trim(),
@@ -151,7 +157,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _detailsOk = ok;
         _detailsMsg = ok ? 'Profile updated.' : _detail(res.body, 'Could not update profile. Check the details.');
-        if (ok) _detailsPwdCtrl.clear();
+        if (ok) _savedDetails = _detailsKey(); //Modified By Nikhil 22Nov26 16:52 For "No changes to save". Old: if (ok) _detailsPwdCtrl.clear();
       });
     } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
       if (mounted) setState(() => _detailsMsg = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
@@ -160,47 +166,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _changePassword() async {
-    if (_curPwdCtrl.text.isEmpty || _newPwdCtrl.text.isEmpty) {
-      setState(() {
-        _passwordMsg = 'Fill in all password fields.';
-        _passwordOk = false;
-      });
-      return;
-    }
-    if (_newPwdCtrl.text != _newPwd2Ctrl.text) {
-      setState(() {
-        _passwordMsg = 'New passwords do not match.';
-        _passwordOk = false;
-      });
-      return;
-    }
-    setState(() {
-      _savingPassword = true;
-      _passwordMsg = null;
-    });
-    try {
-      final res = await apiClient.put('/auth/me/password', {
-        'current_password': _curPwdCtrl.text,
-        'new_password': _newPwdCtrl.text,
-      });
-      if (!mounted) return;
-      final ok = res.statusCode == 200;
-      setState(() {
-        _passwordOk = ok;
-        _passwordMsg = ok ? 'Password changed.' : _detail(res.body, 'Could not change password (minimum 6 characters).');
-        if (ok) {
-          _curPwdCtrl.clear();
-          _newPwdCtrl.clear();
-          _newPwd2Ctrl.clear();
-        }
-      });
-    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
-      if (mounted) setState(() => _passwordMsg = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
-    } finally {
-      if (mounted) setState(() => _savingPassword = false);
-    }
-  }
+  //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page START
+  //Future<void> _changePassword() async {
+  //  if (_curPwdCtrl.text.isEmpty || _newPwdCtrl.text.isEmpty) {
+  //    setState(() {
+  //      _passwordMsg = 'Fill in all password fields.';
+  //      _passwordOk = false;
+  //    });
+  //    return;
+  //  }
+  //  if (_newPwdCtrl.text != _newPwd2Ctrl.text) {
+  //    setState(() {
+  //      _passwordMsg = 'New passwords do not match.';
+  //      _passwordOk = false;
+  //    });
+  //    return;
+  //  }
+  //  setState(() {
+  //    _savingPassword = true;
+  //    _passwordMsg = null;
+  //  });
+  //  try {
+  //    final res = await apiClient.put('/auth/me/password', {
+  //      'current_password': _curPwdCtrl.text,
+  //      'new_password': _newPwdCtrl.text,
+  //    });
+  //    if (!mounted) return;
+  //    final ok = res.statusCode == 200;
+  //    setState(() {
+  //      _passwordOk = ok;
+  //      _passwordMsg = ok ? 'Password changed.' : _detail(res.body, 'Could not change password (minimum 6 characters).');
+  //      if (ok) {
+  //        _curPwdCtrl.clear();
+  //        _newPwdCtrl.clear();
+  //        _newPwd2Ctrl.clear();
+  //      }
+  //    });
+  //  } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+  //    if (mounted) setState(() => _passwordMsg = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
+  //  } finally {
+  //    if (mounted) setState(() => _savingPassword = false);
+  //  }
+  //}
+  //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page END
 
   //Added By Nikhil 21Nov26 22:44 For cancel / keep subscription START
   Map<String, dynamic>? get _pendingCancel => _openCancels.where((c) => c['cancel_type'] == 'pending_request').firstOrNull;
@@ -329,8 +337,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 6),
                 _sectionLabel('PERSONAL DETAILS'),
                 _buildDetails(),
-                _sectionLabel('CHANGE PASSWORD'),
-                _buildPassword(),
+                //Modified By Nikhil 22Nov26 16:52 For Change Password as a menu row. Old: _sectionLabel('CHANGE PASSWORD'), _buildPassword(),
+                _sectionLabel('SECURITY'),
+                DocCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  onTap: () => Navigator.of(context).push(docRoute(const ChangePasswordScreen())),
+                  child: const Row(
+                    children: [
+                      Text('🔒', style: TextStyle(fontSize: 18)),
+                      SizedBox(width: 12),
+                      Expanded(child: Text('Change Password', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700))),
+                      Icon(Icons.chevron_right, color: AppTheme.textSubtle),
+                    ],
+                  ),
+                ),
                 const SupportCard(), //Added By Nikhil 22Nov26 08:35 For Help & support from Platform Settings
                 Center(
                   child: TextButton(
@@ -564,31 +584,173 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          DocField(
-            label: 'Current Password (required to save)',
-            controller: _detailsPwdCtrl,
-            obscure: true,
-            hint: 'Enter current password',
-          ),
+          //Removed By Nikhil 22Nov26 16:52 For password asked in a dialog on Save: DocField(label: 'Current Password (required to save)', controller: _detailsPwdCtrl, obscure: true, hint: 'Enter current password'),
           PillButton(label: 'Save Changes', loading: _savingDetails, onPressed: _saveDetails),
         ],
       ),
     );
   }
 
-  Widget _buildPassword() {
-    return DocCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
+  //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page START
+  //Widget _buildPassword() {
+  //  return DocCard(
+  //    padding: const EdgeInsets.all(16),
+  //    child: Column(
+  //      crossAxisAlignment: CrossAxisAlignment.start,
+  //      children: [
+  //        if (_passwordMsg != null) MessageBanner(_passwordMsg!, success: _passwordOk),
+  //        DocField(label: 'Current Password', controller: _curPwdCtrl, obscure: true),
+  //        DocField(label: 'New Password', controller: _newPwdCtrl, obscure: true),
+  //        DocField(label: 'Type Again New Password', controller: _newPwd2Ctrl, obscure: true),
+  //        PillButton(label: 'Change Password', loading: _savingPassword, onPressed: _changePassword),
+  //      ],
+  //    ),
+  //  );
+  //}
+  //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page END
+}
+
+//Added By Nikhil 22Nov26 16:52 For password asked only when saving profile changes START
+/// "Confirm it's you" — returns the typed password, or null when cancelled. Owns its controller (disposed with the dialog).
+class _ConfirmPasswordDialog extends StatefulWidget {
+  const _ConfirmPasswordDialog();
+
+  @override
+  State<_ConfirmPasswordDialog> createState() => _ConfirmPasswordDialogState();
+}
+
+class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
+  final _pwd = TextEditingController();
+
+  @override
+  void dispose() {
+    _pwd.dispose();
+    super.dispose();
+  }
+
+  void _ok() {
+    if (_pwd.text.isNotEmpty) Navigator.pop(context, _pwd.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      title: const Text("Confirm it's you", style: TextStyle(fontWeight: FontWeight.w800)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_passwordMsg != null) MessageBanner(_passwordMsg!, success: _passwordOk),
-          DocField(label: 'Current Password', controller: _curPwdCtrl, obscure: true),
-          DocField(label: 'New Password', controller: _newPwdCtrl, obscure: true),
-          DocField(label: 'Type Again New Password', controller: _newPwd2Ctrl, obscure: true),
-          PillButton(label: 'Change Password', loading: _savingPassword, onPressed: _changePassword),
+          const Text('Enter your current password to save these changes.', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+          const SizedBox(height: 12),
+          DocField(label: 'Current password', controller: _pwd, obscure: true, onSubmitted: (_) => _ok()),
         ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(onPressed: _ok, child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w800))),
+      ],
+    );
+  }
+}
+//Added By Nikhil 22Nov26 16:52 For password asked only when saving profile changes END
+
+//Added By Nikhil 22Nov26 16:52 For Change Password on its own page (opened from Profile → Security) START
+class ChangePasswordScreen extends StatefulWidget {
+  const ChangePasswordScreen({super.key});
+
+  @override
+  State<ChangePasswordScreen> createState() => _ChangePasswordScreenState();
+}
+
+class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
+  final _cur = TextEditingController();
+  final _new = TextEditingController();
+  final _new2 = TextEditingController();
+  bool _saving = false;
+  String? _msg;
+  bool _ok = false;
+
+  @override
+  void dispose() {
+    for (final c in [_cur, _new, _new2]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    String? problem;
+    if (_cur.text.isEmpty || _new.text.isEmpty) problem = 'Fill in all password fields.';
+    if (problem == null && _new.text != _new2.text) problem = 'New passwords do not match.';
+    if (problem != null) {
+      setState(() {
+        _msg = problem;
+        _ok = false;
+      });
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _msg = null;
+    });
+    try {
+      final res = await apiClient.put('/auth/me/password', {'current_password': _cur.text, 'new_password': _new.text});
+      if (!mounted) return;
+      final ok = res.statusCode == 200;
+      String detail = 'Could not change password (minimum 6 characters).';
+      try {
+        final d = jsonDecode(res.body)['detail'];
+        if (d is String) detail = d;
+      } catch (_) {}
+      setState(() {
+        _ok = ok;
+        _msg = ok ? 'Password changed.' : detail;
+        if (ok) {
+          _cur.clear();
+          _new.clear();
+          _new2.clear();
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() => _msg = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: ListView(
+          padding: kScreenPadding,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Expanded(child: ScreenTitle(title: 'Change Password', subtitle: 'Use at least 6 characters')),
+                SmallPill(label: '← Back', onTap: () => Navigator.pop(context)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            DocCard(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_msg != null) MessageBanner(_msg!, success: _ok),
+                  DocField(label: 'Current Password', controller: _cur, obscure: true),
+                  DocField(label: 'New Password', controller: _new, obscure: true),
+                  DocField(label: 'Type Again New Password', controller: _new2, obscure: true),
+                  PillButton(label: 'Change Password', loading: _saving, onPressed: _save),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+//Added By Nikhil 22Nov26 16:52 For Change Password on its own page (opened from Profile → Security) END

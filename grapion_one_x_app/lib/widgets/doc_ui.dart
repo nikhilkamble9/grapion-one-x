@@ -25,6 +25,7 @@ class PillButton extends StatelessWidget {
     this.padding = const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
     this.fontSize = 14,
     this.fontWeight = FontWeight.w700,
+    this.expand = true, //Added By Nikhil 22Nov26 16:52 For buttons inside a Row (white screen fix)
   });
 
   final String label;
@@ -35,6 +36,8 @@ class PillButton extends StatelessWidget {
   final EdgeInsets padding;
   final double fontSize;
   final FontWeight fontWeight;
+  /// true = full width (default). false = as wide as the label — required inside a Row, where full width is infinite.
+  final bool expand; //Added By Nikhil 22Nov26 16:52 For buttons inside a Row (white screen fix)
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +48,7 @@ class PillButton extends StatelessWidget {
     };
     final textColor = foreground ?? fg;
     return SizedBox(
-      width: double.infinity,
+      width: expand ? double.infinity : null, //Modified By Nikhil 22Nov26 16:52 For buttons inside a Row. Old: width: double.infinity,
       child: Material(
         color: onPressed == null && !loading ? bg.withValues(alpha: 0.6) : bg,
         shape: const StadiumBorder(),
