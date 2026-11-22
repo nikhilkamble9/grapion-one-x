@@ -603,7 +603,7 @@ String formatServerDateTime(String? iso, {bool withTime = true}) {
   return '$date • $hh:$mm';
 }
 
-/// "Nikhil Kamble" -> "NK"
+/// "Aarav Sharma" -> "AS"  //Modified By Nikhil 22Nov26 12:22 For neutral placeholder. Old: "Nikhil Kamble" -> "NK"
 String initialsOf(String first, String last) {
   String pick(String s) => s.trim().isEmpty ? '' : s.trim()[0].toUpperCase();
   final r = '${pick(first)}${pick(last)}';

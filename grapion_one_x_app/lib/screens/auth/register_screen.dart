@@ -192,9 +192,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: DocField(label: 'First Name', controller: _firstNameCtrl, hint: 'Nikhil')),
+                  Expanded(child: DocField(label: 'First Name', controller: _firstNameCtrl, hint: 'e.g. Aarav')), //Modified By Nikhil 22Nov26 12:22 For neutral placeholder. Old: 'Nikhil'
                   const SizedBox(width: 10),
-                  Expanded(child: DocField(label: 'Last Name', controller: _lastNameCtrl, hint: 'Kamble')),
+                  Expanded(child: DocField(label: 'Last Name', controller: _lastNameCtrl, hint: 'e.g. Sharma')), //Modified By Nikhil 22Nov26 12:22 For neutral placeholder. Old: 'Kamble'
                 ],
               ),
               DocField(
@@ -255,7 +255,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
 
-              DocField(label: 'Username (Used for login)', controller: _userCtrl, hint: 'nikhil_kamble'),
+              DocField(label: 'Username (Used for login)', controller: _userCtrl, hint: 'e.g. aarav_sharma'), //Modified By Nikhil 22Nov26 12:22 For neutral placeholder. Old: 'nikhil_kamble'
               DocField(label: 'Password', controller: _passCtrl, hint: 'Enter secure password', obscure: true),
               DocField(label: 'Repeat Password', controller: _pass2Ctrl, hint: 'Re-enter password', obscure: true),
 

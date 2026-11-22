@@ -218,7 +218,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   const SizedBox(height: 16),
                   if (sheetError != null) MessageBanner(sheetError!),
                   if (method == 'upi') ...[
-                    DocField(label: 'Payer UPI ID', controller: upiIdCtrl, hint: 'e.g. nikhil@okaxis'),
+                    DocField(label: 'Payer UPI ID', controller: upiIdCtrl, hint: 'e.g. name@okaxis'), //Modified By Nikhil 22Nov26 12:22 For neutral placeholder. Old: 'e.g. nikhil@okaxis'
                     DocField(
                       label: 'Last 4–5 Digits of Ref/UTR',
                       controller: utrCtrl,

@@ -50,6 +50,14 @@ override `.env`, which is how a server should supply production values.
 | `APP_TIMEZONE` | `Asia/Kolkata` |
 | `FIREBASE_CREDENTIALS_PATH` | Firebase service-account file (default `firebase-service-account.json` in this folder) |
 
+<!-- Added By Nikhil 22Nov26 11:59 For Firebase key kept out of Git START -->
+**Firebase key (optional for development).** `firebase-service-account.json` is **not in Git** (GitHub blocks
+service-account keys). Without it the API runs normally: login, subscriptions, gym, and the in-app 🔔 bell all work.
+Only phone/browser **push** notifications are switched off, and the log shows `Firebase disabled: FileNotFoundError`.
+To enable push, get the file from the project owner privately (or Firebase console → Project settings →
+Service accounts → Generate new private key) and place it in this folder.
+<!-- Added By Nikhil 22Nov26 11:59 For Firebase key kept out of Git END -->
+
 ## Run
 
 ```bash

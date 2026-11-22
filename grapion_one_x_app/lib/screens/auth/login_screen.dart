@@ -119,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 DocField(
                   label: 'Username or Email',
                   controller: _userCtrl,
-                  hint: 'e.g. nikhil_admin',
+                  hint: 'Username, email or mobile', //Modified By Nikhil 22Nov26 12:22 For neutral placeholder. Old: 'e.g. nikhil_admin'
                   textInputAction: TextInputAction.next,
                   autofillHints: const [AutofillHints.username],
                 ),

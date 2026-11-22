@@ -215,7 +215,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             DocField(
               label: 'Registered Username',
               controller: _userCtrl,
-              hint: 'e.g. nikhil_kamble',
+              hint: 'Your username', //Modified By Nikhil 22Nov26 12:22 For neutral placeholder. Old: 'e.g. nikhil_kamble'
               onSubmitted: (_) => _step1VerifyUser(),
             ),
             const Spacer(),
