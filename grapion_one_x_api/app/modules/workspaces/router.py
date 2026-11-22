@@ -204,6 +204,24 @@ async def init_gym_branch(db: AsyncSession, branch_id, user_id):
             "ON CONFLICT (branch_id, weekday) DO NOTHING"), {"b": branch_id, "wd": wd, "closed": wd == 7, "u": user_id})
 
 
+#Added By Nikhil 22Nov26 21:28 For one role per person per business (decided 22Nov26) START
+async def existing_roles(db: AsyncSession, workspace_id, user_id) -> list[dict]:
+    """Roles this person already holds (or was invited to) in this business."""
+    rows = (await db.execute(text(
+        "SELECT r.name AS role, r.code, wm.status, b.name AS branch FROM grapion_one_x.workspace_members wm "
+        "JOIN grapion_one_x.module_roles r ON r.id = wm.role_id LEFT JOIN grapion_one_x.workspace_branches b ON b.id = wm.branch_id "
+        "WHERE wm.workspace_id = :w AND wm.user_id = :u AND wm.status IN ('active','invited')"),
+        {"w": workspace_id, "u": user_id})).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def one_role_message(roles: list[dict]) -> str:
+    r = roles[0]
+    where = f" • {r['branch']}" if r["branch"] else ""
+    return f"Already in this business as {r['role']}{where}{' (invited)' if r['status'] == 'invited' else ''}. One role per person."
+#Added By Nikhil 22Nov26 21:28 For one role per person per business END
+
+
 # ---------------- people search (exact match only, masked) ----------------
 
 def _perm(module_code: str, name: str) -> str:
@@ -225,19 +243,25 @@ async def search_people(
     if bool(username) == bool(mobile):
         raise HTTPException(status_code=400, detail="Search by exact username OR exact mobile number")
 
-    q = select(User).where(User.is_active == True, User.id != user.id)
+    #Modified By Nikhil 22Nov26 21:28 For platform admins never findable by a business. Old: select(User).where(User.is_active == True, User.id != user.id)
+    q = select(User).where(User.is_active == True, User.id != user.id, User.role.notin_(ADMIN_ROLES))
     if username:
         q = q.where(User.username_clean == username.strip().lower())
     else:
         q = q.where(User.mobile_number == re.sub(r"[\s-]", "", mobile))
     found = (await db.execute(q.limit(5))).scalars().all()
     # Privacy: name + the identifier they typed; the other identifier masked. No browsing.
-    return {"results": [{
-        "user_id": str(u.id),
-        "name": f"{u.first_name} {u.last_name}",
-        "username": u.username if username else mask_username(u.username),
-        "mobile": mask_mobile(u.dial_code, u.mobile_number) if username else f"{u.dial_code} {u.mobile_number}",
-    } for u in found]}
+    results = []
+    for u in found:
+        roles = await existing_roles(db, acc.workspace.id, u.id)  #Added By Nikhil 22Nov26 21:28 For one role per person
+        results.append({
+            "user_id": str(u.id),
+            "name": f"{u.first_name} {u.last_name}",
+            "username": u.username if username else mask_username(u.username),
+            "mobile": mask_mobile(u.dial_code, u.mobile_number) if username else f"{u.dial_code} {u.mobile_number}",
+            "already": one_role_message(roles) if roles else None,  #Added By Nikhil 22Nov26 21:28 For one role per person (app greys the row out)
+        })
+    return {"results": results}  #Modified By Nikhil 22Nov26 21:28 For "already" flag. Old: list comprehension without "already"
 
 
 # ---------------- invites ----------------
@@ -273,14 +297,12 @@ async def invite(workspace_id: str, req: InviteRequest, user: User = Depends(get
     if not acc.is_owner and role.rank <= acc.best_role.rank:
         raise HTTPException(status_code=403, detail="You can only add roles below your own")  # e.g. manager cannot add managers
     invitee = (await db.execute(select(User).where(User.id == invitee_uuid, User.is_active == True))).scalar_one_or_none()
-    if not invitee or invitee.id == ws.owner_user_id:
+    if not invitee or invitee.id == ws.owner_user_id or invitee.role in ADMIN_ROLES:  #Modified By Nikhil 22Nov26 21:28 For platform admins never added to a business. Old: if not invitee or invitee.id == ws.owner_user_id:
         raise HTTPException(status_code=404, detail="User not found")
-    dup = (await db.execute(select(WorkspaceMember.id).where(
-        WorkspaceMember.workspace_id == ws.id, WorkspaceMember.user_id == invitee.id, WorkspaceMember.role_id == role.id,
-        WorkspaceMember.branch_id == branch.id, WorkspaceMember.status.in_(("invited", "active")),
-    ))).first()
-    if dup:
-        raise HTTPException(status_code=400, detail="This person already has (or was invited to) this role here")
+    #Modified By Nikhil 22Nov26 21:28 For one role per person per business. Old: duplicate check on the same role + branch only
+    roles = await existing_roles(db, ws.id, invitee.id)
+    if roles:
+        raise HTTPException(status_code=400, detail=one_role_message(roles))
 
     now = now_tz()
     m = WorkspaceMember(workspace_id=ws.id, branch_id=branch.id, user_id=invitee.id, role_id=role.id, status="invited",

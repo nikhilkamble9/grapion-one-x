@@ -22,8 +22,8 @@ from app.core.security import hash_password
 from app.db.models import ModuleRole, User, WorkspaceMember
 from app.db.session import get_db
 from app.modules.notifications.router import notify_users
-from app.modules.workspaces.access import Access, audit, load_access, now_tz
-from app.modules.workspaces.router import init_gym_branch
+from app.modules.workspaces.access import ADMIN_ROLES, Access, audit, load_access, now_tz  #Modified By Nikhil 22Nov26 21:28 For platform admins never added. Old: without ADMIN_ROLES
+from app.modules.workspaces.router import existing_roles, init_gym_branch, one_role_message  #Modified By Nikhil 22Nov26 21:28 For one role per person. Old: import init_gym_branch
 
 router = APIRouter(prefix="/gym/{workspace_id}", tags=["Grapion Gym"])
 S = "grapion_one_x."
@@ -977,13 +977,14 @@ async def add_member(workspace_id: str, req: AddMemberRequest, user: User = Depe
         status = "active"
     else:
         member_user = (await db.execute(select(User).where(User.id == _uuid(req.user_id, "User"), User.is_active == True))).scalar_one_or_none()
-        if not member_user or member_user.id == acc.workspace.owner_user_id:
+        #Modified By Nikhil 22Nov26 21:28 For platform admins never added to a business. Old: if not member_user or member_user.id == acc.workspace.owner_user_id:
+        if not member_user or member_user.id == acc.workspace.owner_user_id or member_user.role in ADMIN_ROLES:
             raise HTTPException(status_code=404, detail="User not found")
         status = "invited"
-    if (await db.execute(text(
-        f"SELECT 1 FROM {S}workspace_members WHERE workspace_id = :w AND user_id = :u AND role_id = :r AND status IN ('active','invited')"),
-        {"w": acc.workspace.id, "u": member_user.id, "r": role.id})).first():
-        raise HTTPException(status_code=400, detail="This person is already a member of your gym")
+    #Modified By Nikhil 22Nov26 21:28 For one role per person per business. Old: duplicate check on the member role only ("already a member of your gym")
+    roles = await existing_roles(db, acc.workspace.id, member_user.id)
+    if roles:
+        raise HTTPException(status_code=400, detail=one_role_message(roles))
     batch = await _batch_ok(db, bid, req.profile.batch_id)
     now = now_tz()
     m = WorkspaceMember(workspace_id=acc.workspace.id, branch_id=bid, user_id=member_user.id, role_id=role.id, status=status,

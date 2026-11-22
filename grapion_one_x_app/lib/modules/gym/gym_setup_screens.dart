@@ -734,14 +734,22 @@ class _AddStaffScreenState extends State<_AddStaffScreen> {
               padding: const EdgeInsets.all(12),
               margin: const EdgeInsets.only(bottom: 8),
               borderColor: _picked == u['user_id'] ? AppTheme.primary : AppTheme.cardBorder,
-              onTap: () => setState(() => _picked = u['user_id'] as String),
+              onTap: u['already'] != null ? null : () => setState(() => _picked = u['user_id'] as String), //Modified By Nikhil 22Nov26 21:28 For people already in this gym not pickable. Old: always tappable
               child: Row(
                 children: [
+                  if (u['already'] != null) const Icon(Icons.block, color: AppTheme.textSubtle) else //Added By Nikhil 22Nov26 21:28 For people already in this gym
                   Icon(_picked == u['user_id'] ? Icons.check_circle : Icons.radio_button_unchecked,
                       color: _picked == u['user_id'] ? AppTheme.primary : AppTheme.textSubtle),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text('${u['name']}\n@${u['username']} • ${u['mobile']}', style: const TextStyle(fontSize: 12, height: 1.4)),
+                    child: Column( //Modified By Nikhil 22Nov26 21:28 For the "already in this gym" line. Old: one Text with name + username
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${u['name']}\n@${u['username']} • ${u['mobile']}', style: const TextStyle(fontSize: 12, height: 1.4)),
+                        if (u['already'] != null)
+                          Text('${u['already']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.warningOrange)),
+                      ],
+                    ),
                   ),
                 ],
               ),

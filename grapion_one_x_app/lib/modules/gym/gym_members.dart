@@ -453,9 +453,10 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.only(bottom: 8),
             borderColor: _isPicked(u) ? AppTheme.primary : AppTheme.cardBorder, //Modified By Nikhil 22Nov26 17:36 For tick not showing (copy vs object compare). Old: _picked == u
-            onTap: () => setState(() => _picked = Map<String, dynamic>.from(u)),
+            onTap: u['already'] != null ? null : () => setState(() => _picked = Map<String, dynamic>.from(u)), //Modified By Nikhil 22Nov26 21:28 For people already in this gym not pickable. Old: always tappable
             child: Row(
               children: [
+                if (u['already'] != null) const Icon(Icons.block, color: AppTheme.textSubtle) else //Added By Nikhil 22Nov26 21:28 For people already in this gym
                 Icon(_isPicked(u) ? Icons.check_circle : Icons.radio_button_unchecked, //Modified By Nikhil 22Nov26 17:36 For tick not showing. Old: _picked == u
                     color: _isPicked(u) ? AppTheme.primary : AppTheme.textSubtle), //Modified By Nikhil 22Nov26 17:36 For tick not showing. Old: _picked == u
                 const SizedBox(width: 10),
@@ -465,6 +466,8 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
                     children: [
                       Text(u['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800)),
                       Text('@${u['username']} • ${u['mobile']}', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                      if (u['already'] != null) //Added By Nikhil 22Nov26 21:28 For one role per person
+                        Text('${u['already']}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.warningOrange)), //Added By Nikhil 22Nov26 21:28 For one role per person
                     ],
                   ),
                 ),
