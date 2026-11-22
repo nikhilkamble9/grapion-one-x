@@ -143,8 +143,8 @@ class _AdminsScreenState extends State<AdminsScreen> {
       if (!mounted) return;
       _toast(context, res.statusCode == 200 ? ok : apiDetail(res.body, 'Could not update'));
       await _load();
-    } catch (_) {
-      if (mounted) _toast(context, 'Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) _toast(context, friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -296,8 +296,8 @@ class _ModulePricingScreenState extends State<ModulePricingScreen> {
       final res = await apiClient.put('/superadmin/modules/$code/prices', body);
       if (!mounted) return;
       _toast(context, res.statusCode == 200 ? 'Prices saved — new requests use them' : apiDetail(res.body, 'Could not save'));
-    } catch (_) {
-      if (mounted) _toast(context, 'Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) _toast(context, friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _saving = null);
     }
@@ -513,8 +513,8 @@ class _DiscountEditorState extends State<_DiscountEditor> {
         }
         setState(() => _error = msg);
       }
-    } catch (_) {
-      setState(() => _error = 'Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -768,8 +768,8 @@ class _PlatformSettingsScreenState extends State<PlatformSettingsScreen> {
       } else {
         setState(() => _error = apiDetail(res.body, 'Check the phone numbers (digits, + and -) and the email format'));
       }
-    } catch (_) {
-      setState(() => _error = 'Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -979,8 +979,8 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
         final msg = apiDetail(res.body, '');
         setState(() => _error = msg.isEmpty ? 'Title and message need at least 2 letters; end date not before start.' : msg);
       }
-    } catch (_) {
-      setState(() => _error = 'Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _saving = false);
     }

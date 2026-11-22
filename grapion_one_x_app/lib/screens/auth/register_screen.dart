@@ -161,7 +161,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         setState(() => _error = detail is String ? detail : 'Registration failed. Please check the details.');
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Connection error. Please try again.');
+      if (mounted) setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error. Please try again.'
     } finally {
       if (mounted) setState(() => _loading = false);
     }

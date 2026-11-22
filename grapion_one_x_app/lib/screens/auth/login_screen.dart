@@ -69,7 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _error = data['detail']?.toString() ?? 'Login failed');
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Connection error. Please check server.');
+      if (mounted) setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error. Please check server.'
     } finally {
       if (mounted) setState(() => _loading = false);
     }

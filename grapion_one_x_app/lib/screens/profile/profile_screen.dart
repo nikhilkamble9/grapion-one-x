@@ -153,8 +153,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _detailsMsg = ok ? 'Profile updated.' : _detail(res.body, 'Could not update profile. Check the details.');
         if (ok) _detailsPwdCtrl.clear();
       });
-    } catch (_) {
-      if (mounted) setState(() => _detailsMsg = 'Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) setState(() => _detailsMsg = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _savingDetails = false);
     }
@@ -195,8 +195,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _newPwd2Ctrl.clear();
         }
       });
-    } catch (_) {
-      if (mounted) setState(() => _passwordMsg = 'Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) setState(() => _passwordMsg = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _savingPassword = false);
     }
@@ -234,8 +234,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         msg = refund == null ? 'Cancellation sent to the admin' : 'Cancellation sent • refund of ${formatMoney(refund as num)} to be settled by admin';
       }
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection error')));
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e)))); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: const SnackBar(content: Text('Connection error'))
     } finally {
       if (mounted) setState(() => _cancelBusy = false);
       await _load();
@@ -250,8 +250,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(res.statusCode == 200 ? 'Cancellation withdrawn — your subscription continues' : apiDetail(res.body, 'Could not update')),
       ));
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection error')));
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e)))); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: const SnackBar(content: Text('Connection error'))
     } finally {
       if (mounted) setState(() => _cancelBusy = false);
       await _load();

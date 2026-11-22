@@ -152,8 +152,8 @@ class _InvitesScreenState extends State<InvitesScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiDetail(res.body, 'Could not respond'))));
       }
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection error')));
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e)))); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: const SnackBar(content: Text('Connection error'))
     } finally {
       if (mounted) setState(() => _busyId = null);
     }
@@ -290,8 +290,8 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
       } else {
         setState(() => _error = apiDetail(res.body, 'Could not set up your business'));
       }
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -427,8 +427,8 @@ class _SetOwnPasswordScreenState extends State<SetOwnPasswordScreen> {
       } else {
         setState(() => _error = apiDetail(res.body, 'Could not change the password'));
       }
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _busy = false);
     }

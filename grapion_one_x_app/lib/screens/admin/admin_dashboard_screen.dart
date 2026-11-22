@@ -83,7 +83,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Connection error';
+          _error = friendlyError(e); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
           _loading = false;
         });
       }
@@ -351,8 +351,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       } else {
         _toast('Could not reject the request');
       }
-    } catch (_) {
-      if (mounted) _toast('Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) _toast(friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     }
   }
 
@@ -896,8 +896,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       } else {
                         setSheet(() { busy = false; err = apiDetail(res.body, 'Could not approve'); });
                       }
-                    } catch (_) {
-                      setSheet(() { busy = false; err = 'Connection error'; });
+                    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+                      setSheet(() { busy = false; err = friendlyError(e); }); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
                     }
                   },
                 ),
@@ -926,8 +926,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       if (!mounted) return;
       _toast(res.statusCode == 200 ? 'Cancellation rejected — subscription continues' : apiDetail(res.body, 'Could not reject'));
       _fetchAdminDashboard();
-    } catch (_) {
-      if (mounted) _toast('Connection error');
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) _toast(friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     }
   }
   //Added By Nikhil 21Nov26 22:44 For module cancellation review END

@@ -71,10 +71,10 @@ class _MyModulesScreenState extends State<MyModulesScreen> {
           _loading = false;
         });
       }
-    } catch (_) {
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
       if (mounted) {
         setState(() {
-          _error = 'Connection error';
+          _error = friendlyError(e); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
           _loading = false;
         });
       }

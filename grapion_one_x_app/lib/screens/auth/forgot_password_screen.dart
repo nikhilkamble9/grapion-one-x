@@ -67,7 +67,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         setState(() => _error = _detail(data, 'Username not found'));
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Connection error');
+      if (mounted) setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -95,7 +95,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         setState(() => _error = _detail(data, 'Mobile number does not match'));
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Connection error');
+      if (mounted) setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -131,7 +131,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         setState(() => _error = _detail(data, 'Failed to reset password (minimum 6 characters).'));
       }
     } catch (e) {
-      if (mounted) setState(() => _error = 'Connection error');
+      if (mounted) setState(() => _error = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
     } finally {
       if (mounted) setState(() => _loading = false);
     }

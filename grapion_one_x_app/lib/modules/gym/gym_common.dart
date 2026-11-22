@@ -66,8 +66,8 @@ Future<Map<String, dynamic>?> gymGet(BuildContext context, String path) async {
     final res = await apiClient.get(path);
     if (res.statusCode == 200) return jsonDecode(res.body) as Map<String, dynamic>;
     if (context.mounted) gymToast(context, apiDetail(res.body, 'Could not load'));
-  } catch (_) {
-    if (context.mounted) gymToast(context, 'Connection error');
+  } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+    if (context.mounted) gymToast(context, friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
   }
   return null;
 }
@@ -79,8 +79,8 @@ Future<Map<String, dynamic>?> gymSend(BuildContext context, String method, Strin
     final res = method == 'PUT' ? await apiClient.put(path, body) : await apiClient.post(path, body);
     if (res.statusCode == 200 || res.statusCode == 201) return jsonDecode(res.body) as Map<String, dynamic>;
     if (context.mounted) gymToast(context, _validation(res.body) ?? apiDetail(res.body, fallback));
-  } catch (_) {
-    if (context.mounted) gymToast(context, 'Connection error');
+  } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+    if (context.mounted) gymToast(context, friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
   }
   return null;
 }

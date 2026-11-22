@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET"/> <!--Added By Nikhil 22Nov26 15:17 For release builds reaching the API on Render-->
     <application
         android:label="grapion_one_x"
         android:name="${applicationName}"

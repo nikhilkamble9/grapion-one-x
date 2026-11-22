@@ -40,8 +40,17 @@ flutter run -d web-server --web-port 3000               # web, open http://local
 flutter run -d <device-id>                              # Android / iOS
 ```
 
-The API address is in `lib/services/api_client.dart` (`http://127.0.0.1:8000/api/v1` for local development).
-On a phone, `127.0.0.1` is the phone itself — use the PC's LAN IP or the live API address.
+<!--Modified By Nikhil 22Nov26 15:17 For API on Render by default. Old: The API address is in lib/services/api_client.dart (http://127.0.0.1:8000/api/v1 for local development). On a phone, 127.0.0.1 is the phone itself — use the PC's LAN IP or the live API address.-->
+The app uses the API deployed on Render by default: `https://grapion-one-x.onrender.com/api/v1`
+(`lib/services/api_client.dart`). The free server sleeps when idle, so the first request can take up to a minute.
+
+To use the API running on this PC instead:
+
+```bash
+flutter run -d web-server --web-port 3000 --dart-define=API_BASE_URL=http://127.0.0.1:8000/api/v1
+```
+
+On a phone, `127.0.0.1` is the phone itself — use the PC's LAN IP (e.g. `http://192.168.1.5:8000/api/v1`) instead.
 
 ## Checks
 

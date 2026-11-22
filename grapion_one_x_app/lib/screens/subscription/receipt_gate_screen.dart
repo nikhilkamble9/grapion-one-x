@@ -121,8 +121,8 @@ class _ReceiptGateScreenState extends State<ReceiptGateScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(res.statusCode == 201 ? 'Cancellation sent to the admin' : apiDetail(res.body, 'Could not cancel')),
       ));
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection error')));
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e)))); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: const SnackBar(content: Text('Connection error'))
     } finally {
       if (mounted) setState(() => _cancelBusy = false);
       await _load();
@@ -139,8 +139,8 @@ class _ReceiptGateScreenState extends State<ReceiptGateScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(res.statusCode == 200 ? 'Great — your subscription request continues' : apiDetail(res.body, 'Could not update')),
       ));
-    } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection error')));
+    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e)))); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: const SnackBar(content: Text('Connection error'))
     } finally {
       if (mounted) setState(() => _cancelBusy = false);
       await _load();
