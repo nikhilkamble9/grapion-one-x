@@ -10,6 +10,7 @@ from app.modules.workspaces.router import router as workspaces_router  #Added By
 from app.modules.notifications.router import router as notifications_router  #Added By Nikhil 22Nov26 00:10 For bell + push
 from app.modules.superadmin.router import router as superadmin_router  #Added By Nikhil 22Nov26 01:22 For super admin pages
 from app.modules.gym.router import router as gym_router  #Added By Nikhil 22Nov26 08:41 For Grapion Gym owner API
+from app.modules.gym.jobs import router as jobs_router  #Added By Nikhil 22Nov26 18:05 For forgot-check-out reminders
 from app.modules.meta.router import router as meta_router  #Added By Nikhil 21Nov26 21:00 For country list endpoint
 
 app = FastAPI(
@@ -39,6 +40,7 @@ app.include_router(workspaces_router, prefix="/api/v1")  #Added By Nikhil 21Nov2
 app.include_router(notifications_router, prefix="/api/v1")  #Added By Nikhil 22Nov26 00:10 For bell + push
 app.include_router(superadmin_router, prefix="/api/v1")  #Added By Nikhil 22Nov26 01:22 For super admin pages
 app.include_router(gym_router, prefix="/api/v1")  #Added By Nikhil 22Nov26 08:41 For Grapion Gym owner API
+app.include_router(jobs_router, prefix="/api/v1")  #Added By Nikhil 22Nov26 18:05 For forgot-check-out reminders
 
 @app.get("/health", tags=["Health"])
 async def health_check():

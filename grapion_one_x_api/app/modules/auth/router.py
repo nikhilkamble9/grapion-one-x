@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError  #Added By Nikhil 22Nov26 17:36 For duplicate username/email race
 from app.db.session import get_db
 from app.db.models import User
 from app.core.security import hash_password, verify_password, create_access_token
@@ -227,7 +228,9 @@ async def update_my_profile(
     if req.dial_code != country["dial"]:
         raise HTTPException(status_code=400, detail="Dial code does not match the selected country")
 
-    clean_email = req.email.strip().lower()
+    #Modified By Nikhil 22Nov26 17:36 For email optional (None = keep current). Old: clean_email = req.email.strip().lower()
+    new_email = req.email.strip() if req.email else current_user.email
+    clean_email = new_email.lower()
     clean_mobile = req.mobile_number.strip().replace(" ", "").replace("-", "")
     if not clean_mobile.isdigit():
         raise HTTPException(status_code=400, detail="Mobile number must contain digits only")
@@ -242,14 +245,31 @@ async def update_my_profile(
     if dup.first():
         raise HTTPException(status_code=400, detail="Mobile number already registered")
 
+    #Added By Nikhil 22Nov26 17:36 For username change in Edit Profile (checked only when it changes) START
+    new_username = (req.username or "").strip()
+    if new_username and new_username.lower() != (current_user.username or "").lower():
+        if not new_username.replace("_", "").replace(".", "").isalnum() or not new_username.isascii():
+            raise HTTPException(status_code=400, detail="Username can use letters, numbers, _ and . only")
+        taken = await db.execute(select(User.id).where(User.username_clean == new_username.lower(), User.id != current_user.id))
+        if taken.first():
+            raise HTTPException(status_code=400, detail="Username already taken")
+    if new_username:
+        current_user.username = new_username
+    #Added By Nikhil 22Nov26 17:36 For username change in Edit Profile (checked only when it changes) END
+
     current_user.first_name = req.first_name.strip()
     current_user.last_name = req.last_name.strip()
-    current_user.email = req.email.strip()
+    current_user.email = new_email  #Modified By Nikhil 22Nov26 17:36 For email optional. Old: current_user.email = req.email.strip()
     current_user.country_code = country["code"]
     current_user.dial_code = req.dial_code
     current_user.mobile_number = clean_mobile
     current_user.updated_at = _dt.now(_ZI(_settings.APP_TIMEZONE))
-    await db.commit()
+    #Modified By Nikhil 22Nov26 17:36 For same username/email taken at the same moment (unique index) → clear 400. Old: await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Username, email or mobile was just taken by someone else")
     return {"status": "success", "message": "Profile updated"}
 
 

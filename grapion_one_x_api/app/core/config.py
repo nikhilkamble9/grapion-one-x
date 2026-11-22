@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     #Added By Nikhil 22Nov26 00:10 For Firebase Cloud Messaging (path relative to backend/)
     FIREBASE_CREDENTIALS_PATH: str = "firebase-service-account.json"
 
+    #Added By Nikhil 22Nov26 18:05 For scheduled jobs (forgot-check-out reminders). Empty = job endpoint disabled.
+    CRON_KEY: str = ""
+
     model_config = SettingsConfigDict(
         #Modified By Nikhil 22Nov26 11:59 For .env found next to the API on any machine/server (real env vars still win). Old: env_file="D:\\Software Development\\Grapion Digital\\Code\\grapion-one-x\\backend\\.env",
         env_file=str(Path(__file__).resolve().parents[2] / ".env"),

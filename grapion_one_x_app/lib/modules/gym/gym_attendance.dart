@@ -1,6 +1,7 @@
 // //Added By Nikhil 22Nov26 14:41 For staff self check-in + shift attendance (my shift card, my attendance, staff register, month summary, corrections)
 import 'package:flutter/material.dart';
 
+import '../../services/location_service.dart'; //Added By Nikhil 22Nov26 20:53 For location check-in
 import '../../theme/app_theme.dart';
 import '../../widgets/doc_ui.dart';
 import 'gym_common.dart';
@@ -111,9 +112,21 @@ class _MyShiftCardState extends State<MyShiftCard> {
     setState(() => _shifts = ((d['shifts'] as List?) ?? []).cast<Map<String, dynamic>>());
   }
 
-  Future<void> _act(String what, [String? shiftId]) async {
+  Future<void> _act(String what, [String? shiftId, bool needsLocation = false]) async { //Modified By Nikhil 22Nov26 20:53 For location check-in. Old: ([String? shiftId])
     setState(() => _busy = true);
-    final r = await gymSend(context, 'POST', '$_base/me/$what', {'shift_id': ?shiftId},
+    //Added By Nikhil 22Nov26 20:53 For location check-in: read GPS only when this branch has set its location START
+    var geo = <String, dynamic>{};
+    if (what == 'checkin' && needsLocation) {
+      final fix = await LocationService.current();
+      if (!mounted) return;
+      if (fix.error != null) {
+        setState(() => _busy = false);
+        return gymToast(context, fix.error!);
+      }
+      geo = fix.toJson();
+    }
+    //Added By Nikhil 22Nov26 20:53 For location check-in END
+    final r = await gymSend(context, 'POST', '$_base/me/$what', {'shift_id': ?shiftId, ...geo}, //Modified By Nikhil 22Nov26 20:53 For location body. Old: {'shift_id': ?shiftId},
         fallback: what == 'checkin' ? 'Could not check in' : 'Could not check out');
     if (!mounted) return;
     setState(() => _busy = false);
@@ -172,12 +185,12 @@ class _MyShiftCardState extends State<MyShiftCard> {
               if (s['can_check_in'] == true || s['can_check_out'] == true) ...[
                 const SizedBox(height: 10),
                 PillButton(
-                  label: s['can_check_out'] == true ? 'Check Out' : 'Check In',
+                  label: s['can_check_out'] == true ? 'Check Out' : (s['extra_day'] == true ? 'Check In (extra day)' : 'Check In'), //Modified By Nikhil 22Nov26 20:53 For week-off extra day. Old: ... : 'Check In',
                   variant: s['can_check_out'] == true ? PillVariant.secondary : PillVariant.accent,
                   padding: const EdgeInsets.all(12),
                   fontSize: 13,
                   loading: _busy,
-                  onPressed: _busy ? null : () => _act(s['can_check_out'] == true ? 'checkout' : 'checkin', s['shift_id'] as String),
+                  onPressed: _busy ? null : () => _act(s['can_check_out'] == true ? 'checkout' : 'checkin', s['shift_id'] as String, s['location_required'] == true), //Modified By Nikhil 22Nov26 20:53 For location check-in. Old: (..., s['shift_id'] as String)
                 ),
               ],
               const SizedBox(height: 10),
@@ -498,3 +511,103 @@ class _StaffAttendanceScreenState extends State<StaffAttendanceScreen> {
     ];
   }
 }
+
+// =============================== Visits: who is inside now / who came today ===============================
+//Added By Nikhil 22Nov26 20:53 For "Inside now" / "Visits today" tiles opening the list of members START
+
+class VisitsScreen extends StatefulWidget {
+  const VisitsScreen({super.key, required this.ctx, this.branch, this.insideOnly = true, this.onOpenMember});
+  final GymCtx ctx;
+  final String? branch;
+  final bool insideOnly;
+  /// Opens the member page (members.view); null = rows not tappable.
+  final void Function(BuildContext context, String profileId)? onOpenMember;
+
+  @override
+  State<VisitsScreen> createState() => _VisitsScreenState();
+}
+
+class _VisitsScreenState extends State<VisitsScreen> {
+  late String _view = widget.insideOnly ? 'inside' : 'today';
+  late String? _branch = widget.branch;
+  Map<String, dynamic>? _d;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final q = [if (_view == 'inside') 'inside=true', if (_branch != null) 'branch_id=$_branch'].join('&');
+    final d = await gymGet(context, '${widget.ctx.base}/visits${q.isEmpty ? '' : '?$q'}');
+    if (mounted) setState(() => _d = d ?? const {'visits': [], 'count': 0});
+  }
+
+  void _reload() {
+    setState(() => _d = null);
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final visits = ((_d?['visits'] as List?) ?? []).cast<Map<String, dynamic>>();
+    return GymPage(
+      title: _view == 'inside' ? 'Inside Now' : 'Visits Today',
+      subtitle: _d == null ? null : '${_d!['count']} member${_d!['count'] == 1 ? '' : 's'}',
+      onRefresh: _load,
+      children: [
+        SegmentTabs(
+          options: const {'inside': '🟢 Inside now', 'today': '📅 Today'},
+          selected: _view,
+          onChanged: (v) {
+            _view = v;
+            _reload();
+          },
+        ),
+        const SizedBox(height: 12),
+        BranchChips(ctx: widget.ctx, selected: _branch, onChanged: (b) {
+          _branch = b;
+          _reload();
+        }),
+        if (widget.ctx.branches.length > 1) const SizedBox(height: 12),
+        if (_d == null)
+          gymLoading
+        else if (visits.isEmpty)
+          gymEmpty(_view == 'inside' ? 'Nobody is inside right now.' : 'No visits yet today.')
+        else
+          for (final v in visits)
+            DocCard(
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 8),
+              onTap: widget.onOpenMember == null ? null : () => widget.onOpenMember!(context, v['profile_id'] as String),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${v['name']} • ${v['member_code']}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                        Text(
+                          [
+                            v['check_out_at'] == null ? 'In since ${_clock(v['check_in_at'])}' : '${_clock(v['check_in_at'])} → ${_clock(v['check_out_at'])}',
+                            if (v['forgot_checkout'] == true) 'since ${niceDate((v['check_in_at'] as String).substring(0, 10))} (forgot to check out)',
+                            if (widget.ctx.branches.length > 1) v['branch_name'],
+                          ].join(' • '),
+                          style: TextStyle(fontSize: 11, color: v['forgot_checkout'] == true ? AppTheme.warningOrange : AppTheme.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (v['inside'] == true)
+                    const StatusChip('Inside', bg: AppTheme.successLight, fg: AppTheme.primaryDark, fontSize: 10)
+                  else if (v['minutes'] != null)
+                    StatusChip('${v['minutes'] ~/ 60}h ${v['minutes'] % 60}m', bg: AppTheme.chipBg, fg: AppTheme.label, fontSize: 10),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+}
+//Added By Nikhil 22Nov26 20:53 For "Inside now" / "Visits today" tiles opening the list of members END

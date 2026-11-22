@@ -39,10 +39,11 @@ class UpdateProfileRequest(BaseModel):
     current_password: str = Field(..., min_length=1, max_length=128)
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    email: EmailStr
+    email: EmailStr | None = None  #Modified By Nikhil 22Nov26 17:36 For owner-created logins (placeholder @members.invalid) saving without an email; None = keep. Old: email: EmailStr
     country_code: str = Field(..., min_length=2, max_length=10)
     dial_code: str = Field(..., min_length=2, max_length=10)
     mobile_number: str = Field(..., min_length=4, max_length=20)
+    username: str | None = Field(None, min_length=3, max_length=50)  #Added By Nikhil 22Nov26 17:36 For username change in Edit Profile (None = keep)
 
 class ChangePasswordRequest(BaseModel):
     current_password: str = Field(..., min_length=1, max_length=128)

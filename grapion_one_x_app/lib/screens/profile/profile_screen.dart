@@ -2,15 +2,16 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+//Removed By Nikhil 22Nov26 17:36 For mobile field moved to Edit Profile: import 'package:flutter/services.dart';
 
 import '../../services/api_client.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/doc_ui.dart';
-import '../auth/register_screen.dart' show Country, CountryPickerSheet, flagOf;
+import '../auth/register_screen.dart' show Country; //Modified By Nikhil 22Nov26 17:36 For country picker moved to Edit Profile. Old: show Country, CountryPickerSheet, flagOf
 import '../auth/login_screen.dart';
 import '../subscription/store_screen.dart';
 import '../../widgets/announcement_banner.dart'; //Added By Nikhil 22Nov26 08:35 For Help & support card
+import 'edit_profile_screen.dart'; //Added By Nikhil 22Nov26 17:36 For Edit Profile page + initials avatar
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -29,9 +30,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _mobileCtrl = TextEditingController();
   //Removed By Nikhil 22Nov26 16:52 For password asked in a dialog on Save: final _detailsPwdCtrl = TextEditingController();
   //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page: final _curPwdCtrl, _newPwdCtrl, _newPwd2Ctrl = TextEditingController();
-  String _savedDetails = ''; //Added By Nikhil 22Nov26 16:52 For "No changes to save" (details as last loaded / saved)
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page: String _savedDetails = '';
+  List<Map<String, dynamic>> _entries = []; //Added By Nikhil 22Nov26 17:36 For My Gym / My Gym Membership
+  final Map<String, Map<String, dynamic>> _memberHome = {}; //Added By Nikhil 22Nov26 17:36 For member expiry (workspace id → /me/member)
 
-  List<Country> _countries = const [];
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page: List<Country> _countries = const [];
   Country? _country;
   String _username = '';
 
@@ -42,10 +45,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _cancelBusy = false; //Added By Nikhil 21Nov26 22:44 For cancel / keep subscription
 
   bool _loading = true;
-  bool _savingDetails = false;
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page: bool _savingDetails = false;
   //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page: bool _savingPassword = false;
-  String? _detailsMsg;
-  bool _detailsOk = false;
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page: String? _detailsMsg; bool _detailsOk = false;
   //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page: String? _passwordMsg; bool _passwordOk = false;
   String? _loadError;
 
@@ -75,6 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         apiClient.get('/subscriptions/my-modules'),
         apiClient.get('/subscriptions/my-status'),
         apiClient.get('/subscriptions/cancellations'), //Added By Nikhil 21Nov26 22:44 For open cancellations
+        apiClient.get('/workspaces/my-entries'), //Added By Nikhil 22Nov26 17:36 For My Gym / My Gym Membership
       ]);
       if (!mounted) return;
       if (r[0].statusCode != 200) throw Exception('profile');
@@ -90,7 +93,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _emailCtrl.text = p['email'] ?? '';
         _mobileCtrl.text = p['mobile_number'] ?? '';
         _username = p['username'] ?? '';
-        _countries = countries;
+        //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page: _countries = countries;
         _country = countries.where((c) => c.code == p['country_code']).firstOrNull ??
             Country(code: p['country_code'] ?? 'IN', name: p['country_code'] ?? 'IN', dial: p['dial_code'] ?? '+91', currency: 'INR', symbol: '₹');
         _active = mine['modules'] ?? [];
@@ -100,9 +103,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _openCancels = r[4].statusCode == 200
             ? ((jsonDecode(r[4].body)['open'] as List?) ?? []).cast<Map<String, dynamic>>()
             : [];
-        _savedDetails = _detailsKey(); //Added By Nikhil 22Nov26 16:52 For "No changes to save"
+        //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page: _savedDetails = _detailsKey();
+        _entries = r[5].statusCode == 200 ? ((jsonDecode(r[5].body)['entries'] as List?) ?? []).cast<Map<String, dynamic>>() : []; //Added By Nikhil 22Nov26 17:36 For My Gym
         _loading = false;
       });
+      //Added By Nikhil 22Nov26 17:36 For member membership expiry on the profile START
+      for (final e in _entries.where((e) => e['role_code'] == 'member' && e['active'] != false && e['workspace_id'] != null)) {
+        final res = await apiClient.get('/gym/${e['workspace_id']}/me/member');
+        if (res.statusCode == 200 && mounted) setState(() => _memberHome[e['workspace_id'] as String] = jsonDecode(res.body) as Map<String, dynamic>);
+      }
+      //Added By Nikhil 22Nov26 17:36 For member membership expiry on the profile END
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -113,58 +123,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  String _detail(String body, String fallback) {
-    try {
-      final d = jsonDecode(body)['detail'];
-      return d is String ? d : fallback;
-    } catch (_) {
-      return fallback;
-    }
-  }
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page START
+  //String _detail(String body, String fallback) {
+  //  try {
+  //    final d = jsonDecode(body)['detail'];
+  //    return d is String ? d : fallback;
+  //  } catch (_) {
+  //    return fallback;
+  //  }
+  //}
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page END
 
   //Added By Nikhil 22Nov26 16:52 For "No changes to save" START
-  String _detailsKey() => [_firstCtrl.text.trim(), _lastCtrl.text.trim(), _emailCtrl.text.trim().toLowerCase(), _country?.code ?? '',
-        _mobileCtrl.text.replaceAll(' ', '')].join('|');
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page: String _detailsKey() => [first, last, email, country, mobile].join('|');
   //Added By Nikhil 22Nov26 16:52 For "No changes to save" END
 
-  Future<void> _saveDetails() async {
-    //Modified By Nikhil 22Nov26 16:52 For password asked in a dialog on Save. Old: if (_detailsPwdCtrl.text.isEmpty) { _detailsMsg = 'Enter your current password to save changes.'; return; }
-    if (_detailsKey() == _savedDetails) {
-      setState(() {
-        _detailsMsg = 'No changes to save.';
-        _detailsOk = false;
-      });
-      return;
-    }
-    final password = await showDialog<String>(context: context, builder: (_) => const _ConfirmPasswordDialog());
-    if (password == null || password.isEmpty || !mounted) return;
-    setState(() {
-      _savingDetails = true;
-      _detailsMsg = null;
-    });
-    try {
-      final res = await apiClient.put('/auth/me/profile', {
-        'current_password': password, //Modified By Nikhil 22Nov26 16:52 For password from the dialog. Old: _detailsPwdCtrl.text,
-        'first_name': _firstCtrl.text.trim(),
-        'last_name': _lastCtrl.text.trim(),
-        'email': _emailCtrl.text.trim(),
-        'country_code': _country?.code,
-        'dial_code': _country?.dial,
-        'mobile_number': _mobileCtrl.text.replaceAll(' ', ''),
-      });
-      if (!mounted) return;
-      final ok = res.statusCode == 200;
-      setState(() {
-        _detailsOk = ok;
-        _detailsMsg = ok ? 'Profile updated.' : _detail(res.body, 'Could not update profile. Check the details.');
-        if (ok) _savedDetails = _detailsKey(); //Modified By Nikhil 22Nov26 16:52 For "No changes to save". Old: if (ok) _detailsPwdCtrl.clear();
-      });
-    } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
-      if (mounted) setState(() => _detailsMsg = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
-    } finally {
-      if (mounted) setState(() => _savingDetails = false);
-    }
-  }
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page START
+  //Future<void> _saveDetails() async {
+  //  //Modified By Nikhil 22Nov26 16:52 For password asked in a dialog on Save. Old: if (_detailsPwdCtrl.text.isEmpty) { _detailsMsg = 'Enter your current password to save changes.'; return; }
+  //  if (_detailsKey() == _savedDetails) {
+  //    setState(() {
+  //      _detailsMsg = 'No changes to save.';
+  //      _detailsOk = false;
+  //    });
+  //    return;
+  //  }
+  //  final password = await showDialog<String>(context: context, builder: (_) => const _ConfirmPasswordDialog());
+  //  if (password == null || password.isEmpty || !mounted) return;
+  //  setState(() {
+  //    _savingDetails = true;
+  //    _detailsMsg = null;
+  //  });
+  //  try {
+  //    final res = await apiClient.put('/auth/me/profile', {
+  //      'current_password': password, //Modified By Nikhil 22Nov26 16:52 For password from the dialog. Old: _detailsPwdCtrl.text,
+  //      'first_name': _firstCtrl.text.trim(),
+  //      'last_name': _lastCtrl.text.trim(),
+  //      'email': _emailCtrl.text.trim(),
+  //      'country_code': _country?.code,
+  //      'dial_code': _country?.dial,
+  //      'mobile_number': _mobileCtrl.text.replaceAll(' ', ''),
+  //    });
+  //    if (!mounted) return;
+  //    final ok = res.statusCode == 200;
+  //    setState(() {
+  //      _detailsOk = ok;
+  //      _detailsMsg = ok ? 'Profile updated.' : _detail(res.body, 'Could not update profile. Check the details.');
+  //      if (ok) _savedDetails = _detailsKey(); //Modified By Nikhil 22Nov26 16:52 For "No changes to save". Old: if (ok) _detailsPwdCtrl.clear();
+  //    });
+  //  } catch (e) { //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: catch (_)
+  //    if (mounted) setState(() => _detailsMsg = friendlyError(e)); //Modified By Nikhil 22Nov26 16:06 For clear error messages. Old: 'Connection error'
+  //  } finally {
+  //    if (mounted) setState(() => _savingDetails = false);
+  //  }
+  //}
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page END
 
   //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page START
   //Future<void> _changePassword() async {
@@ -279,22 +292,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
   //Added By Nikhil 21Nov26 22:44 For cancel / keep subscription END
 
-  void _pickCountry() {
-    if (_countries.isEmpty) return;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
-      builder: (ctx) => CountryPickerSheet(
-        countries: _countries,
-        onSelected: (c) {
-          setState(() => _country = c);
-          Navigator.pop(ctx);
-        },
-      ),
-    );
-  }
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page START
+  //void _pickCountry() {
+  //  if (_countries.isEmpty) return;
+  //  showModalBottomSheet<void>(
+  //    context: context,
+  //    isScrollControlled: true,
+  //    backgroundColor: Colors.white,
+  //    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+  //    builder: (ctx) => CountryPickerSheet(
+  //      countries: _countries,
+  //      onSelected: (c) {
+  //        setState(() => _country = c);
+  //        Navigator.pop(ctx);
+  //      },
+  //    ),
+  //  );
+  //}
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page END
 
   Future<void> _openStore({List<String> preselect = const []}) async {
     await Navigator.of(context).push(docRoute(StoreScreen(preselectCodes: preselect)));
@@ -332,11 +347,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
                 )
               else ...[
-                _sectionLabel('MY SUBSCRIPTIONS'),
-                _buildSubscriptions(),
-                const SizedBox(height: 6),
-                _sectionLabel('PERSONAL DETAILS'),
-                _buildDetails(),
+                //Modified By Nikhil 22Nov26 17:36 For avatar + Edit Profile, modules only for owners, gym membership for members. Old: MY SUBSCRIPTIONS (always) + PERSONAL DETAILS form
+                _profileHeader(),
+                if (_isGymPersonOnly) ..._gymSections() else ...[
+                  _sectionLabel('MY SUBSCRIPTIONS'),
+                  _buildSubscriptions(),
+                  const SizedBox(height: 6),
+                ],
                 //Modified By Nikhil 22Nov26 16:52 For Change Password as a menu row. Old: _sectionLabel('CHANGE PASSWORD'), _buildPassword(),
                 _sectionLabel('SECURITY'),
                 DocCard(
@@ -378,6 +395,143 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
+  //Added By Nikhil 22Nov26 17:36 For avatar header, Edit Profile, My Gym / My Gym Membership START
+  /// Someone added to a gym (member / staff) who has no G.One.X modules of their own → no "Add Modules" section.
+  bool get _isGymPersonOnly =>
+      _active.isEmpty && _expired.isEmpty && _pending == null && _entries.isNotEmpty && _entries.every((e) => e['role_code'] != 'owner');
+
+  Widget _profileHeader() {
+    final name = '${_firstCtrl.text} ${_lastCtrl.text}'.trim();
+    return DocCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              InitialsAvatar(first: _firstCtrl.text, last: _lastCtrl.text),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                    if (_username.isNotEmpty) Text('@$_username', style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                    if (!isPlaceholderEmail(_emailCtrl.text))
+                      Text(_emailCtrl.text, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted), overflow: TextOverflow.ellipsis),
+                    Text('${_country?.dial ?? ''} ${_mobileCtrl.text}', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          PillButton(
+            label: '✏️  Edit Profile',
+            variant: PillVariant.secondary,
+            padding: const EdgeInsets.all(11),
+            fontSize: 13,
+            onPressed: () async {
+              final saved = await Navigator.of(context).push<bool>(docRoute(const EditProfileScreen()));
+              if (saved == true && mounted) _load();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _gymSections() {
+    final members = _entries.where((e) => e['role_code'] == 'member').toList();
+    final staff = _entries.where((e) => e['role_code'] != 'member' && e['role_code'] != 'owner').toList();
+    return [
+      if (members.isNotEmpty) ...[
+        _sectionLabel('MY GYM MEMBERSHIP'),
+        for (final e in members) _membershipCard(e),
+        const SizedBox(height: 6),
+      ],
+      if (staff.isNotEmpty) ...[
+        _sectionLabel('MY GYM'),
+        for (final e in staff)
+          DocCard(
+            padding: const EdgeInsets.all(14),
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                Text(e['icon'] as String? ?? '🏋️', style: const TextStyle(fontSize: 22)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${e['workspace_name'] ?? ''}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                      Text([if (e['branch_name'] != null) e['branch_name'], e['module_name']].join(' • '),
+                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                    ],
+                  ),
+                ),
+                StatusChip('${e['role_name'] ?? ''}', bg: AppTheme.successLight, fg: AppTheme.primaryDark, fontSize: 10),
+              ],
+            ),
+          ),
+        const SizedBox(height: 6),
+      ],
+    ];
+  }
+
+  Widget _membershipCard(Map<String, dynamic> e) {
+    final h = _memberHome[e['workspace_id']];
+    final ms = h?['membership'] as Map<String, dynamic>?;
+    final last = h?['last_expired'] as Map<String, dynamic>?;
+    final gym = '${e['workspace_name'] ?? 'your gym'}';
+    final days = (ms?['days_left'] as num?)?.toInt();
+    final soon = days != null && days <= 7;
+    final String line;
+    if (h == null) {
+      line = 'Loading…';
+    } else if (ms != null) {
+      line = 'Your ${ms['plan_name']} membership expires on ${niceDay(ms['expiry_date'] as String)}. Contact $gym to renew.';
+    } else if (last != null) {
+      line = 'Your ${last['plan_name']} membership ended on ${niceDay(last['expiry_date'] as String)}. Contact $gym to renew.';
+    } else {
+      line = 'No membership plan yet. Contact $gym to start one.';
+    }
+    return DocCard(
+      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 10),
+      borderColor: ms == null || soon ? const Color(0xFFFDE68A) : AppTheme.cardBorder,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text([gym, if (e['branch_name'] != null) e['branch_name']].join(' • '),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              ),
+              if (ms != null)
+                StatusChip(days == 1 ? '1 day left' : '$days days left',
+                    bg: soon ? AppTheme.warningLight : AppTheme.successLight, fg: soon ? AppTheme.warningOrange : AppTheme.primaryDark, fontSize: 10)
+              else if (h != null)
+                const StatusChip('Not active', bg: AppTheme.errorLight, fg: AppTheme.errorRed, fontSize: 10),
+            ],
+          ),
+          if (ms != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('${ms['plan_name']} • ${niceDay(ms['start_date'] as String)} → ${niceDay(ms['expiry_date'] as String)}',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.label)),
+            ),
+          const SizedBox(height: 6),
+          Text(line, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted, height: 1.4)),
+        ],
+      ),
+    );
+  }
+
+  /// "2026-12-22" → "22 Dec 2026".
+  static String niceDay(String iso) => formatServerDateTime('${iso.substring(0, 10)}T00:00:00', withTime: false);
+  //Added By Nikhil 22Nov26 17:36 For avatar header, Edit Profile, My Gym / My Gym Membership END
 
   Widget _sectionLabel(String t) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
@@ -529,67 +683,69 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildDetails() {
-    return DocCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_detailsMsg != null) MessageBanner(_detailsMsg!, success: _detailsOk),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: DocField(label: 'First Name', controller: _firstCtrl)),
-              const SizedBox(width: 10),
-              Expanded(child: DocField(label: 'Last Name', controller: _lastCtrl)),
-            ],
-          ),
-          DocField(label: 'Registered Email', controller: _emailCtrl, keyboardType: TextInputType.emailAddress),
-          const FieldLabel('Country & Mobile Number'),
-          Row(
-            children: [
-              Material(
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  side: const BorderSide(color: AppTheme.borderSubtle),
-                ),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  onTap: _pickCountry,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_country != null) flagOf(_country!.code),
-                        const SizedBox(width: 8),
-                        Text(_country?.dial ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                        const SizedBox(width: 8),
-                        const Text('▼', style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _mobileCtrl,
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]')), LengthLimitingTextInputFormatter(15)],
-                  decoration: const InputDecoration(hintText: '98234 11223'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          //Removed By Nikhil 22Nov26 16:52 For password asked in a dialog on Save: DocField(label: 'Current Password (required to save)', controller: _detailsPwdCtrl, obscure: true, hint: 'Enter current password'),
-          PillButton(label: 'Save Changes', loading: _savingDetails, onPressed: _saveDetails),
-        ],
-      ),
-    );
-  }
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page START
+  //Widget _buildDetails() {
+  //  return DocCard(
+  //    padding: const EdgeInsets.all(16),
+  //    child: Column(
+  //      crossAxisAlignment: CrossAxisAlignment.start,
+  //      children: [
+  //        if (_detailsMsg != null) MessageBanner(_detailsMsg!, success: _detailsOk),
+  //        Row(
+  //          crossAxisAlignment: CrossAxisAlignment.start,
+  //          children: [
+  //            Expanded(child: DocField(label: 'First Name', controller: _firstCtrl)),
+  //            const SizedBox(width: 10),
+  //            Expanded(child: DocField(label: 'Last Name', controller: _lastCtrl)),
+  //          ],
+  //        ),
+  //        DocField(label: 'Registered Email', controller: _emailCtrl, keyboardType: TextInputType.emailAddress),
+  //        const FieldLabel('Country & Mobile Number'),
+  //        Row(
+  //          children: [
+  //            Material(
+  //              color: Colors.white,
+  //              shape: RoundedRectangleBorder(
+  //                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+  //                side: const BorderSide(color: AppTheme.borderSubtle),
+  //              ),
+  //              child: InkWell(
+  //                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+  //                onTap: _pickCountry,
+  //                child: Padding(
+  //                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+  //                  child: Row(
+  //                    mainAxisSize: MainAxisSize.min,
+  //                    children: [
+  //                      if (_country != null) flagOf(_country!.code),
+  //                      const SizedBox(width: 8),
+  //                      Text(_country?.dial ?? '', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+  //                      const SizedBox(width: 8),
+  //                      const Text('▼', style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
+  //                    ],
+  //                  ),
+  //                ),
+  //              ),
+  //            ),
+  //            const SizedBox(width: 8),
+  //            Expanded(
+  //              child: TextField(
+  //                controller: _mobileCtrl,
+  //                keyboardType: TextInputType.phone,
+  //                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]')), LengthLimitingTextInputFormatter(15)],
+  //                decoration: const InputDecoration(hintText: '98234 11223'),
+  //              ),
+  //            ),
+  //          ],
+  //        ),
+  //        const SizedBox(height: 14),
+  //        //Removed By Nikhil 22Nov26 16:52 For password asked in a dialog on Save: DocField(label: 'Current Password (required to save)', controller: _detailsPwdCtrl, obscure: true, hint: 'Enter current password'),
+  //        PillButton(label: 'Save Changes', loading: _savingDetails, onPressed: _saveDetails),
+  //      ],
+  //    ),
+  //  );
+  //}
+  //Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page END
 
   //Removed By Nikhil 22Nov26 16:52 For Change Password on its own page START
   //Widget _buildPassword() {
@@ -612,47 +768,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 //Added By Nikhil 22Nov26 16:52 For password asked only when saving profile changes START
 /// "Confirm it's you" — returns the typed password, or null when cancelled. Owns its controller (disposed with the dialog).
-class _ConfirmPasswordDialog extends StatefulWidget {
-  const _ConfirmPasswordDialog();
+//Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page START
+//class _ConfirmPasswordDialog extends StatefulWidget {
+//  const _ConfirmPasswordDialog();
+//
+//  @override
+//  State<_ConfirmPasswordDialog> createState() => _ConfirmPasswordDialogState();
+//}
+//Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page END
 
-  @override
-  State<_ConfirmPasswordDialog> createState() => _ConfirmPasswordDialogState();
-}
-
-class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
-  final _pwd = TextEditingController();
-
-  @override
-  void dispose() {
-    _pwd.dispose();
-    super.dispose();
-  }
-
-  void _ok() {
-    if (_pwd.text.isNotEmpty) Navigator.pop(context, _pwd.text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: Colors.white,
-      title: const Text("Confirm it's you", style: TextStyle(fontWeight: FontWeight.w800)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Enter your current password to save these changes.', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
-          const SizedBox(height: 12),
-          DocField(label: 'Current password', controller: _pwd, obscure: true, onSubmitted: (_) => _ok()),
-        ],
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        TextButton(onPressed: _ok, child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w800))),
-      ],
-    );
-  }
-}
+//Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page START
+//class _ConfirmPasswordDialogState extends State<_ConfirmPasswordDialog> {
+//  final _pwd = TextEditingController();
+//
+//  @override
+//  void dispose() {
+//    _pwd.dispose();
+//    super.dispose();
+//  }
+//
+//  void _ok() {
+//    if (_pwd.text.isNotEmpty) Navigator.pop(context, _pwd.text);
+//  }
+//
+//  @override
+//  Widget build(BuildContext context) {
+//    return AlertDialog(
+//      backgroundColor: Colors.white,
+//      title: const Text("Confirm it's you", style: TextStyle(fontWeight: FontWeight.w800)),
+//      content: Column(
+//        mainAxisSize: MainAxisSize.min,
+//        crossAxisAlignment: CrossAxisAlignment.start,
+//        children: [
+//          const Text('Enter your current password to save these changes.', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+//          const SizedBox(height: 12),
+//          DocField(label: 'Current password', controller: _pwd, obscure: true, onSubmitted: (_) => _ok()),
+//        ],
+//      ),
+//      actions: [
+//        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+//        TextButton(onPressed: _ok, child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w800))),
+//      ],
+//    );
+//  }
+//}
+//Removed By Nikhil 22Nov26 17:36 For Edit Profile on its own page END
 //Added By Nikhil 22Nov26 16:52 For password asked only when saving profile changes END
 
 //Added By Nikhil 22Nov26 16:52 For Change Password on its own page (opened from Profile → Security) START

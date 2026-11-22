@@ -413,6 +413,8 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
     );
   }
 
+  bool _isPicked(dynamic u) => _picked != null && _picked!['user_id'] == u['user_id']; //Added By Nikhil 22Nov26 17:36 For tick compared by user id
+
   List<Widget> _searchPart() => [
         SegmentTabs(
           options: const {'username': 'Exact username', 'mobile': 'Exact mobile'},
@@ -450,12 +452,12 @@ class _AddMemberScreenState extends State<AddMemberScreen> {
           DocCard(
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.only(bottom: 8),
-            borderColor: _picked == u ? AppTheme.primary : AppTheme.cardBorder,
+            borderColor: _isPicked(u) ? AppTheme.primary : AppTheme.cardBorder, //Modified By Nikhil 22Nov26 17:36 For tick not showing (copy vs object compare). Old: _picked == u
             onTap: () => setState(() => _picked = Map<String, dynamic>.from(u)),
             child: Row(
               children: [
-                Icon(_picked == u ? Icons.check_circle : Icons.radio_button_unchecked,
-                    color: _picked == u ? AppTheme.primary : AppTheme.textSubtle),
+                Icon(_isPicked(u) ? Icons.check_circle : Icons.radio_button_unchecked, //Modified By Nikhil 22Nov26 17:36 For tick not showing. Old: _picked == u
+                    color: _isPicked(u) ? AppTheme.primary : AppTheme.textSubtle), //Modified By Nikhil 22Nov26 17:36 For tick not showing. Old: _picked == u
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -552,6 +554,7 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
   }
 
   Future<void> _act(String method, String path, Map<String, dynamic> body, String ok) async {
+    if (_busy) return; //Added By Nikhil 22Nov26 18:05 For ignoring a double tap while an action runs
     setState(() => _busy = true);
     final r = await gymSend(context, method, path, body);
     if (!mounted) return;
@@ -601,16 +604,20 @@ class _MemberDetailScreenState extends State<MemberDetailScreen> {
                       : 'No plan yet',
               style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
             ),
-            if (m['status'] == 'active' && _can['checkin'] == true) ...[
-              const SizedBox(height: 12),
-              PillButton(
-                label: m['inside'] == true ? 'Check Out' : 'Check In',
-                variant: m['inside'] == true ? PillVariant.secondary : PillVariant.accent,
-                loading: _busy,
-                onPressed: () => _act('POST', '$_path/${m['inside'] == true ? 'checkout' : 'checkin'}', {},
-                    m['inside'] == true ? 'Checked out' : 'Checked in'),
-              ),
-            ],
+            //Removed By Nikhil 22Nov26 18:05 For members check in/out only from their own app (not owner/staff) START
+            //if (m['status'] == 'active' && _can['checkin'] == true) ...[
+            //  const SizedBox(height: 12),
+            //  PillButton(
+            //    label: m['inside'] == true ? 'Check Out' : 'Check In',
+            //    variant: m['inside'] == true ? PillVariant.secondary : PillVariant.accent,
+            //    loading: _busy,
+            //    onPressed: () => _act('POST', '$_path/${m['inside'] == true ? 'checkout' : 'checkin'}', {},
+            //        m['inside'] == true ? 'Checked out' : 'Checked in'),
+            //  ),
+            //],
+            //Removed By Nikhil 22Nov26 18:05 For members check in/out only from their own app (not owner/staff) END
+            if (m['inside'] == true) //Added By Nikhil 22Nov26 18:05 For showing the member is inside (read-only)
+              const Padding(padding: EdgeInsets.only(top: 8), child: StatusChip('🟢 Inside now', bg: AppTheme.successLight, fg: AppTheme.primaryDark)), //Added By Nikhil 22Nov26 18:05 For showing the member is inside (read-only)
           ],
         ),
       ),

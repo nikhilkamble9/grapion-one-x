@@ -42,6 +42,7 @@ dependencies:
   country_flags: ^4.1.2
   firebase_core: ^5.2.0 #Added By Nikhil 22Nov26 00:10 For push notifications
   firebase_messaging: ^17.1.0 #Added By Nikhil 22Nov26 00:10 For push notifications
+  geolocator: ^14.1.2 #Added By Nikhil 22Nov26 20:53 For location check-in (MIT, no API key)
 dev_dependencies:
   flutter_test:
     sdk: flutter

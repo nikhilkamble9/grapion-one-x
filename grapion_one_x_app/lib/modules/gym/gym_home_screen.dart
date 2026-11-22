@@ -9,6 +9,7 @@ import '../../widgets/announcement_banner.dart';
 import '../../widgets/doc_ui.dart';
 import 'gym_attendance.dart'; //Added By Nikhil 22Nov26 14:41 For staff check-in card + Staff Attendance
 import 'gym_common.dart';
+import 'gym_member_screens.dart'; //Added By Nikhil 22Nov26 17:36 For member home (step 5)
 import 'gym_members.dart';
 import 'gym_setup_screens.dart';
 
@@ -73,7 +74,9 @@ class _GymHomeScreenState extends State<GymHomeScreen> {
               _header(),
               const SizedBox(height: 14),
               const AnnouncementBanners(),
-              if (_role == 'member') ..._memberSoon()
+              //Modified By Nikhil 22Nov26 17:36 For member home (step 5). Old: if (_role == 'member') ..._memberSoon()
+              if (_role == 'member')
+                MemberHomeSection(key: ValueKey(identityHashCode(_o)), workspaceId: widget.entry['workspace_id'] as String) // new key on pull-to-refresh → reloads
               else if (ctx == null && !_failed) gymLoading
               else if (ctx == null) gymEmpty('Could not load your gym. Pull down to try again.')
               else ...[
@@ -149,6 +152,14 @@ class _GymHomeScreenState extends State<GymHomeScreen> {
     ];
   }
 
+  //Added By Nikhil 22Nov26 20:53 For the visits list (tap a row → member page)
+  Widget _visits(bool inside) => VisitsScreen(
+        ctx: _ctx!,
+        branch: _branch,
+        insideOnly: inside,
+        onOpenMember: _ctx!.can('members.view') ? (c, id) => Navigator.of(c).push(docRoute(MemberDetailScreen(ctx: _ctx!, id: id))) : null,
+      );
+
   Widget _statsGrid() {
     final s = _stats;
     int n(String k) => (s[k] as num?)?.toInt() ?? 0;
@@ -156,8 +167,9 @@ class _GymHomeScreenState extends State<GymHomeScreen> {
       ('${n('active')}', 'Active members', AppTheme.primaryDark, () => _open(MembersScreen(ctx: _ctx!, branch: _branch, status: 'active'))),
       ('${n('expiring')}', 'Expiring soon', AppTheme.warningOrange, () => _open(MembersScreen(ctx: _ctx!, branch: _branch, status: 'expiring'))),
       ('${n('expired')}', 'Expired', AppTheme.errorRed, () => _open(MembersScreen(ctx: _ctx!, branch: _branch, status: 'expired'))),
-      ('${n('inside_now')}', 'Inside now', AppTheme.accentBlue, null),
-      ('${n('visits_today')}', 'Visits today', AppTheme.textPrimary, null),
+      //Modified By Nikhil 22Nov26 20:53 For tiles opening who is inside / who came today. Old: onTap null
+      ('${n('inside_now')}', 'Inside now', AppTheme.accentBlue, _ctx!.can('attendance.view') ? () => _open(_visits(true)) : null),
+      ('${n('visits_today')}', 'Visits today', AppTheme.textPrimary, _ctx!.can('attendance.view') ? () => _open(_visits(false)) : null),
       if (_ctx!.can('payments.record')) ('${n('pending_payments')}', 'Payments to verify', AppTheme.warningOrange,
           () => _open(PaymentsScreen(ctx: _ctx!, branch: _branch, status: 'pending'))),
       if (_ctx!.can('attendance.view')) ('${n('staff_present_today')}', 'Staff in today (of ${n('staff_scheduled_today')})', AppTheme.primaryDark, //Added By Nikhil 22Nov26 14:41 For staff present tile
@@ -274,20 +286,22 @@ class _GymHomeScreenState extends State<GymHomeScreen> {
     ];
   }
 
-  List<Widget> _memberSoon() => [
-        DocCard(
-          gradient: const LinearGradient(colors: [AppTheme.pillDark, Color(0xFF1E293B)]),
-          borderColor: AppTheme.pillDark,
-          child: const Row(
-            children: [
-              Text('🏋️', style: TextStyle(fontSize: 26)),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text('Your member page (membership, visits, payments, notices) is being built next.',
-                    style: TextStyle(fontSize: 12, color: Colors.white, height: 1.4)),
-              ),
-            ],
-          ),
-        ),
-      ];
+  //Removed By Nikhil 22Nov26 17:36 For member placeholder replaced by MemberHomeSection START
+  //List<Widget> _memberSoon() => [
+  //      DocCard(
+  //        gradient: const LinearGradient(colors: [AppTheme.pillDark, Color(0xFF1E293B)]),
+  //        borderColor: AppTheme.pillDark,
+  //        child: const Row(
+  //          children: [
+  //            Text('🏋️', style: TextStyle(fontSize: 26)),
+  //            SizedBox(width: 12),
+  //            Expanded(
+  //              child: Text('Your member page (membership, visits, payments, notices) is being built next.',
+  //                  style: TextStyle(fontSize: 12, color: Colors.white, height: 1.4)),
+  //            ),
+  //          ],
+  //        ),
+  //      ),
+  //    ];
+  //Removed By Nikhil 22Nov26 17:36 For member placeholder replaced by MemberHomeSection END
 }

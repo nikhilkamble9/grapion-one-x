@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/doc_ui.dart';
+import '../../services/location_service.dart'; //Added By Nikhil 22Nov26 20:53 For gym location (owner)
 import 'gym_common.dart';
 
 String _branchFor(GymCtx ctx, String? b) => b ?? ctx.branches.first['id'] as String;
@@ -1109,6 +1110,89 @@ class _BranchesScreenState extends State<BranchesScreen> {
     if (ok == true && mounted) gymToast(context, 'Settings saved');
   }
 
+  //Added By Nikhil 22Nov26 20:53 For location check-in: owner saves where the gym is + allowed distance START
+  Future<void> _location(Map<String, dynamic> b) async {
+    final d = await gymGet(context, '${widget.ctx.base}/branches/${b['id']}/setup');
+    if (!mounted || d == null) return;
+    final loc = d['location'] as Map<String, dynamic>?;
+    if (loc == null) return gymToast(context, 'Only the owner can set the check-in location');
+    double? lat = (loc['latitude'] as num?)?.toDouble();
+    double? lng = (loc['longitude'] as num?)?.toDouble();
+    final radius = TextEditingController(text: '${loc['radius_m'] ?? 50}');
+    String? note;
+    bool busy = false;
+    await showGymSheet<void>(
+      context,
+      title: 'Check-in location • ${b['name']}',
+      disposeAfter: [radius],
+      builder: (sc) => StatefulBuilder(
+        builder: (sc, setS) {
+          Future<void> save({bool off = false}) async {
+            final r = int.tryParse(radius.text.trim());
+            if (r == null || r < 20 || r > 1000) return setS(() => note = 'Distance must be 20 to 1000 metres');
+            setS(() => busy = true);
+            final ok = await gymSend(sc, 'PUT', '${widget.ctx.base}/branches/${b['id']}/location',
+                {'latitude': off ? null : lat, 'longitude': off ? null : lng, 'radius_m': r});
+            setS(() => busy = false);
+            if (ok != null && sc.mounted) {
+              Navigator.pop(sc);
+              if (mounted) gymToast(context, off ? 'Location check switched off' : 'Check-in location saved');
+            }
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                lat == null
+                    ? 'Not set: members and staff can check in from anywhere.'
+                    : 'Set ✓ Members and staff must be within the distance below to check in.',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: lat == null ? AppTheme.warningOrange : AppTheme.primaryDark),
+              ),
+              if (lat != null)
+                Text('${lat!.toStringAsFixed(5)}, ${lng!.toStringAsFixed(5)}', style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+              const SizedBox(height: 12),
+              PillButton(
+                label: '📍 Use my current location',
+                variant: PillVariant.secondary,
+                loading: busy,
+                onPressed: () async {
+                  setS(() => busy = true);
+                  final fix = await LocationService.current();
+                  setS(() {
+                    busy = false;
+                    if (fix.error != null) {
+                      note = fix.error;
+                    } else {
+                      lat = fix.lat;
+                      lng = fix.lng;
+                      note = (fix.accuracy ?? 0) > 50
+                          ? 'GPS accuracy is about ${fix.accuracy!.round()} m. For a better fix, stand near the entrance or a window and try again.'
+                          : 'Got it (accuracy about ${fix.accuracy?.round()} m). Tap Save.';
+                    }
+                  });
+                },
+              ),
+              const SizedBox(height: 6),
+              const Text('Stand inside the gym (near the entrance) when you tap this.', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+              const SizedBox(height: 12),
+              DocField(label: 'Allowed distance (metres)', controller: radius, keyboardType: TextInputType.number, hint: '50'),
+              const Text('50 m is recommended: phone GPS indoors is often 10–50 m off.', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+              if (note != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(note!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+              const SizedBox(height: 14),
+              PillButton(label: 'Save', variant: PillVariant.accent, loading: busy, onPressed: lat == null ? null : () => save()),
+              if ((loc['latitude']) != null) ...[
+                const SizedBox(height: 8),
+                PillButton(label: 'Switch location check off', variant: PillVariant.secondary, foreground: AppTheme.errorRed, onPressed: () => save(off: true)),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+  //Added By Nikhil 22Nov26 20:53 For location check-in: owner saves where the gym is + allowed distance END
+
   @override
   Widget build(BuildContext context) {
     return GymPage(
@@ -1129,11 +1213,13 @@ class _BranchesScreenState extends State<BranchesScreen> {
                 if (b['address'] != null || b['phone'] != null)
                   Text([b['address'], b['phone']].whereType<String>().join(' • '), style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                 const SizedBox(height: 10),
-                Row(
+                Wrap( //Modified By Nikhil 22Nov26 20:53 For a third option that still fits on a phone. Old: Row(children: [Edit, SizedBox, Rules])
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     SmallPill(label: '✏️ Edit', onTap: () => _edit(Map<String, dynamic>.from(b))),
-                    const SizedBox(width: 8),
                     SmallPill(label: '⚙️ Rules, reminders & UPI', onTap: () => _settings(Map<String, dynamic>.from(b))),
+                    SmallPill(label: '📌 Check-in location', onTap: () => _location(Map<String, dynamic>.from(b))), //Added By Nikhil 22Nov26 20:53 For location check-in
                   ],
                 ),
               ],

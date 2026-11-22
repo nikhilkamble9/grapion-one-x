@@ -291,7 +291,66 @@ async def branch_setup(workspace_id: str, branch_id: str, user: User = Depends(g
             f"SELECT late_grace_minutes, half_day_after_minutes, early_out_grace_minutes, reminder_lead_days, upi_id, upi_payee_name "
             f"FROM {S}gym_branch_settings WHERE branch_id = :b"), {"b": bid})).mappings().first()
         out["settings"] = dict(s) if s else None
+        #Added By Nikhil 22Nov26 20:53 For location check-in: gym position + radius
+        g = (await db.execute(text(f"SELECT latitude, longitude, checkin_radius_m FROM {S}workspace_branches WHERE id = :b"), {"b": bid})).mappings().first()
+        out["location"] = {"latitude": float(g["latitude"]) if g["latitude"] is not None else None,
+                           "longitude": float(g["longitude"]) if g["longitude"] is not None else None, "radius_m": g["checkin_radius_m"]}
     return out
+
+
+#Added By Nikhil 22Nov26 20:53 For location check-in: owner saves the gym position + allowed radius START
+class LocationRequest(BaseModel):
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
+    radius_m: int = Field(50, ge=20, le=1000)
+
+    @model_validator(mode="after")
+    def both(self):
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("Send both latitude and longitude, or neither (to switch the location rule off)")
+        return self
+
+
+@router.put("/branches/{branch_id}/location")
+async def set_location(workspace_id: str, branch_id: str, req: LocationRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    acc = await load_access(db, user, workspace_id)
+    bid = await _branch(db, acc, branch_id, "gym.business.manage")
+    await db.execute(text(
+        f"UPDATE {S}workspace_branches SET latitude = :la, longitude = :lo, checkin_radius_m = :r, updated_at = now(), modified_by = :u WHERE id = :b"),
+        {"la": req.latitude, "lo": req.longitude, "r": req.radius_m, "u": user.id, "b": bid})
+    audit(db, user, "branch.location_updated", "workspace_branches", bid, acc.workspace.id,
+          {"set": req.latitude is not None, "radius_m": req.radius_m})  # no coordinates in the audit log
+    await db.commit()
+    return {"status": "updated"}
+
+
+class GeoRequest(BaseModel):
+    lat: float | None = Field(None, ge=-90, le=90)
+    lng: float | None = Field(None, ge=-180, le=180)
+    accuracy_m: float | None = Field(None, ge=0, le=100000)
+
+
+def _distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Great-circle distance in metres (haversine)."""
+    import math
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = math.radians(lat2 - lat1), math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+async def _geo_check(db: AsyncSession, bid, lat: float | None, lng: float | None) -> None:
+    """Branch with a saved position → the phone must be within the radius. No saved position → no rule."""
+    g = (await db.execute(text(f"SELECT latitude, longitude, checkin_radius_m FROM {S}workspace_branches WHERE id = :b"), {"b": bid})).mappings().first()
+    if not g or g["latitude"] is None:
+        return
+    if lat is None or lng is None:
+        raise HTTPException(status_code=400, detail="Turn on location to check in at the gym")
+    d = _distance_m(float(g["latitude"]), float(g["longitude"]), lat, lng)
+    if d > g["checkin_radius_m"]:
+        raise HTTPException(status_code=400, detail=f"You are about {int(round(d))} m from the gym. Check in when you are there (within {g['checkin_radius_m']} m).")
+#Added By Nikhil 22Nov26 20:53 For location check-in: owner saves the gym position + allowed radius END
 
 
 class HourRow(BaseModel):
@@ -652,12 +711,9 @@ async def edit_shift(workspace_id: str, shift_id: str, req: SlotRequest, user: U
 # ======================= staff =======================
 
 def _can_see_pay(acc: Access, branch_id: UUID, role_code: str, member_user_id: UUID, me: User) -> bool:
-    """Owner: everyone. Manager: own branch, but not other managers. Staff: only themselves."""
-    if member_user_id == me.id:
-        return True
-    if not acc.can("gym.staff.view_pay", branch_id):
-        return False
-    return acc.is_owner or role_code != "manager"
+    """Only the owner sees (and sets) staff pay — decided 22Nov26 18:05."""
+    #Modified By Nikhil 22Nov26 18:05 For pay visible to the owner only. Old: own pay → True; manager with staff.view_pay → non-managers of own branch
+    return acc.is_owner
 
 
 @router.get("/staff")
@@ -1157,6 +1213,8 @@ async def cancel_membership(workspace_id: str, membership_id: str, user: User = 
 @router.post("/members/{profile_id}/checkin")
 async def member_checkin(workspace_id: str, profile_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     acc = await load_access(db, user, workspace_id)
+    #Added By Nikhil 22Nov26 18:05 For members check in/out only from their own app — owner/staff cannot do it for them
+    raise HTTPException(status_code=403, detail="Members check in and out from their own app")
     m = await _member(db, acc, profile_id, "gym.checkin")
     if m["member_status"] != "active":
         raise HTTPException(status_code=400, detail="This member has not accepted the invite yet")
@@ -1178,6 +1236,8 @@ async def member_checkin(workspace_id: str, profile_id: str, user: User = Depend
 @router.post("/members/{profile_id}/checkout")
 async def member_checkout(workspace_id: str, profile_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     acc = await load_access(db, user, workspace_id)
+    #Added By Nikhil 22Nov26 18:05 For members check in/out only from their own app — owner/staff cannot do it for them
+    raise HTTPException(status_code=403, detail="Members check in and out from their own app")
     m = await _member(db, acc, profile_id, "gym.checkin")
     res = await db.execute(text(
         f"UPDATE {S}gym_member_attendance SET check_out_at = :now, checked_out_by = :u, updated_at = :now "
@@ -1315,6 +1375,7 @@ async def _att_rows(db: AsyncSession, branch_ids: list[UUID], d1: date, d2: date
     """One row per (day, active staff member, assigned shift) with the attendance record if any."""
     return (await db.execute(text(f"""
         SELECT CAST(g.d AS date) AS work_date, wm.id AS member_id, wm.branch_id, b.name AS branch_name, wm.user_id,
+               (b.latitude IS NOT NULL) AS geo,
                u.first_name, u.last_name, r.code AS role_code, r.name AS role_name, r.rank,
                s.id AS shift_id, s.name AS shift_name, s.start_time, s.end_time, s.weekdays,
                a.id AS att_id, a.check_in_at, a.check_out_at, a.status, a.corrected_by, a.correction_note,
@@ -1351,7 +1412,8 @@ def _att_out(r, now: datetime) -> dict:
     tz = now.tzinfo
     opens = datetime.combine(d, r["start_time"], tz) - timedelta(minutes=CHECKIN_EARLY_MIN)
     ends = datetime.combine(d, r["end_time"], tz)
-    can_in = (d == now.date() and works and not r["holiday"] and not (rec and (rec["check_in_at"] or rec["corrected_by"]))
+    #Modified By Nikhil 22Nov26 20:53 For staff check-in on a week off (extra day). Old: d == now.date() and works and not r["holiday"] ...
+    can_in = (d == now.date() and not r["holiday"] and not (rec and (rec["check_in_at"] or rec["corrected_by"]))
               and opens <= now < ends)
     return {
         "work_date": d.isoformat(), "member_id": str(r["member_id"]), "branch_id": str(r["branch_id"]), "branch_name": r["branch_name"],
@@ -1362,6 +1424,8 @@ def _att_out(r, now: datetime) -> dict:
         "status": status, "status_label": _STATUS_LABEL.get(status, status), "working_now": working,
         "corrected": bool(r["corrected_by"]), "correction_note": r["correction_note"], "holiday": r["holiday"],
         "can_check_in": can_in, "can_check_out": working, "check_in_opens": _t(opens.time()),
+        "extra_day": not works,  #Added By Nikhil 22Nov26 20:53 For week-off check-in shown as an extra day
+        "location_required": bool(r["geo"]),  #Added By Nikhil 22Nov26 20:53 For location check-in (app asks for GPS only when needed)
     }
 
 
@@ -1404,7 +1468,7 @@ async def my_today(workspace_id: str, user: User = Depends(get_current_user), db
             "checkin_early_minutes": CHECKIN_EARLY_MIN, "shifts": items}
 
 
-class MyCheckRequest(BaseModel):
+class MyCheckRequest(GeoRequest):  #Modified By Nikhil 22Nov26 20:53 For location check-in. Old: class MyCheckRequest(BaseModel):
     shift_id: str | None = None
 
 
@@ -1423,13 +1487,14 @@ async def my_checkin(workspace_id: str, req: MyCheckRequest, user: User = Depend
     if not open_:
         if any(o["status"] == "holiday" for _, o in pool):
             raise HTTPException(status_code=400, detail="Today is a holiday at your branch. No check-in needed.")
-        if all(o["status"] == "week_off" for _, o in pool):
-            raise HTTPException(status_code=400, detail="Today is your week off.")
-        later = sorted(o["check_in_opens"] for _, o in pool if o["status"] == "pending" and o["check_in_opens"] > now.strftime("%H:%M"))
+        #Removed By Nikhil 22Nov26 20:53 For week-off check-in allowed (extra day): if all week_off → 400 "Today is your week off."
+        #Modified By Nikhil 22Nov26 20:53 For week-off shifts also showing when check-in opens. Old: ... if o["status"] == "pending" and ...
+        later = sorted(o["check_in_opens"] for _, o in pool if o["status"] in ("pending", "week_off") and o["check_in_opens"] > now.strftime("%H:%M"))
         if later:
             raise HTTPException(status_code=400, detail=f"Check-in opens at {later[0]} ({CHECKIN_EARLY_MIN} min before your shift)")
         raise HTTPException(status_code=400, detail="Your shift for today is over or already marked")
     r, o = open_[0]
+    await _geo_check(db, r["branch_id"], req.lat, req.lng)  #Added By Nikhil 22Nov26 20:53 For location check-in (staff)
     status, _ = _att_status(today, now, r["start_time"], r["end_time"], _cfg(r),
                             {"check_in_at": now, "check_out_at": None, "status": None, "corrected_by": None}, None, True)
     new_id = (await db.execute(text(
@@ -1586,3 +1651,314 @@ async def correct_attendance(workspace_id: str, req: CorrectRequest, user: User 
     await db.commit()
     return {"status": req.status, "id": str(att_id)}
 #Added By Nikhil 22Nov26 14:41 For staff self check-in + shift attendance (register, month summary, corrections) END
+
+
+# ======================= member self-service (step 5) =======================
+#Added By Nikhil 22Nov26 17:36 For member screens: home, check-in/out, visits, payments, renew, gym info START
+# Every route below works ONLY on the caller's own member record in this business (role 'member', status active).
+
+async def _me_member(db: AsyncSession, acc: Access) -> dict:
+    mine = [r for r in acc.roles if r.role.code == "member"]
+    if not mine:
+        raise HTTPException(status_code=403, detail="This page is for gym members")
+    p = (await db.execute(text(
+        f"SELECT p.id, p.branch_id, p.member_code, p.joined_on, p.batch_id, b.name AS branch_name, b.address, b.phone, "
+        f"(b.latitude IS NOT NULL) AS geo "
+        f"FROM {S}gym_member_profiles p JOIN {S}workspace_branches b ON b.id = p.branch_id WHERE p.workspace_member_id = :m"),
+        {"m": mine[0].id})).mappings().first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Your member profile was not found. Please contact the gym.")
+    return dict(p)
+
+
+def _ms_out(r, today: date) -> dict:
+    return {"id": str(r["id"]), "plan_name": r["plan_name"], "start_date": r["start_date"].isoformat(),
+            "expiry_date": r["expiry_date"].isoformat(), "days_left": max(0, (r["expiry_date"] - today).days + 1) if r["start_date"] <= today else None,
+            "total": r["total_amount_paise"] / 100, "paid": (r["paid"] or 0) / 100, "pending": (r["pending"] or 0) / 100,
+            "status": r["status"]}
+
+
+async def _today_rules(db: AsyncSession, bid: UUID) -> dict:
+    """Branch opening hours today + holiday (server time IST)."""
+    today = _today()
+    h = (await db.execute(text(
+        f"SELECT is_closed, open_time, close_time FROM {S}gym_branch_hours WHERE branch_id = :b AND weekday = :wd"),
+        {"b": bid, "wd": today.isoweekday()})).mappings().first()
+    hol = (await db.execute(text(
+        f"SELECT reason FROM {S}gym_holidays WHERE branch_id = :b AND is_active AND holiday_date = :t LIMIT 1"),
+        {"b": bid, "t": today})).scalar_one_or_none()
+    return {"closed": bool(h is None or h["is_closed"]), "open": _t(h["open_time"]) if h else None,
+            "close": _t(h["close_time"]) if h else None, "holiday": hol}
+
+
+def _checkin_block(rules: dict, active: bool, inside: bool) -> str | None:
+    """Why the member may not check in right now (None = allowed)."""
+    if inside:
+        return None
+    if rules["holiday"]:
+        return f"The gym is closed today ({rules['holiday']})"
+    if rules["closed"] or not rules["open"]:
+        return "The gym is closed today"
+    now_hm = now_tz().strftime("%H:%M")
+    if not (rules["open"] <= now_hm < rules["close"]):
+        return f"Check-in is open {rules['open']} – {rules['close']}"
+    if not active:
+        return "Your membership is not active today. Please renew."
+    return None
+
+
+@router.get("/me/member")
+async def my_member_home(workspace_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    acc = await load_access(db, user, workspace_id)
+    p = await _me_member(db, acc)
+    today = _today()
+    ms = (await db.execute(text(f"""
+        SELECT ms.id, ms.plan_name, ms.start_date, ms.expiry_date, ms.total_amount_paise, ms.status,
+               (SELECT sum(amount_paise) FROM {S}gym_payments g WHERE g.membership_id = ms.id AND g.status = 'verified') AS paid,
+               (SELECT sum(amount_paise) FROM {S}gym_payments g WHERE g.membership_id = ms.id AND g.status = 'pending') AS pending
+          FROM {S}gym_memberships ms WHERE ms.member_profile_id = :p AND ms.status = 'active'
+         ORDER BY ms.start_date"""), {"p": p["id"]})).mappings().all()
+    current = next((m for m in ms if m["start_date"] <= today <= m["expiry_date"]), None)
+    upcoming = [m for m in ms if m["start_date"] > today]
+    last = max((m for m in ms if m["expiry_date"] < today), key=lambda m: m["expiry_date"], default=None)
+    visit = (await db.execute(text(
+        f"SELECT check_in_at, check_out_at FROM {S}gym_member_attendance WHERE member_profile_id = :p "
+        "ORDER BY check_in_at DESC LIMIT 1"), {"p": p["id"]})).mappings().first()
+    tz = now_tz().tzinfo
+    inside = bool(visit and visit["check_out_at"] is None)
+    today_visit = visit if visit and visit["check_in_at"].astimezone(tz).date() == today else None
+    rules = await _today_rules(db, p["branch_id"])
+    batch = None
+    if p["batch_id"]:
+        b = (await db.execute(text(f"""
+            SELECT bt.name, bt.start_time, bt.end_time, bt.weekdays, u.first_name, u.last_name, sp.specialization
+              FROM {S}gym_batches bt
+              LEFT JOIN {S}workspace_members wm ON wm.id = bt.trainer_member_id AND wm.status = 'active'
+              LEFT JOIN {S}users u ON u.id = wm.user_id
+              LEFT JOIN {S}gym_staff_profiles sp ON sp.workspace_member_id = wm.id
+             WHERE bt.id = :b"""), {"b": p["batch_id"]})).mappings().first()
+        if b:
+            batch = {"name": b["name"], "start_time": _t(b["start_time"]), "end_time": _t(b["end_time"]), "weekdays": list(b["weekdays"] or []),
+                     "trainer": f"{b['first_name']} {b['last_name']}" if b["first_name"] else None, "specialization": b["specialization"]}
+    block = _checkin_block(rules, current is not None, inside)
+    #Added By Nikhil 22Nov26 18:05 For "you forgot to check out" (reminder sent once; the visit stays open) START
+    forgot = bool(inside and (visit["check_in_at"].astimezone(tz).date() < today
+                              or (rules["close"] and now_tz().strftime("%H:%M") >= rules["close"])))
+    if forgot:
+        from app.modules.gym.jobs import notify_forgot_checkouts
+        if await notify_forgot_checkouts(db, p["id"]):
+            await db.commit()
+    #Added By Nikhil 22Nov26 18:05 For "you forgot to check out" (reminder sent once; the visit stays open) END
+    return {
+        "forgot_checkout": forgot,  #Added By Nikhil 22Nov26 18:05 For "you forgot to check out"
+        "location_required": bool(p["geo"]),  #Added By Nikhil 22Nov26 20:53 For location check-in (app asks for GPS only when needed)
+        "inside_since": visit["check_in_at"].astimezone(tz).isoformat() if inside else None,  #Added By Nikhil 22Nov26 18:05 For open visit from an earlier day
+        "today": today.isoformat(), "gym": acc.workspace.name, "branch": p["branch_name"], "member_code": p["member_code"],
+        "joined_on": p["joined_on"].isoformat(),
+        "membership": _ms_out(current, today) if current else None,
+        "upcoming": [_ms_out(m, today) for m in upcoming],
+        "last_expired": _ms_out(last, today) if last and not current else None,
+        "inside_now": inside,
+        "today_visit": {"check_in_at": today_visit["check_in_at"].astimezone(tz).isoformat(),
+                        "check_out_at": today_visit["check_out_at"].astimezone(tz).isoformat() if today_visit["check_out_at"] else None}
+        if today_visit else None,
+        "hours_today": rules, "batch": batch,
+        "can_check_in": not inside and block is None, "can_check_out": inside, "check_in_note": None if inside else block,
+    }
+
+
+@router.post("/me/visit/checkin")
+async def my_visit_checkin(workspace_id: str, req: GeoRequest | None = None, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):  #Modified By Nikhil 22Nov26 20:53 For location check-in. Old: no body
+    """Member checks themselves in (trusted, decided 22Nov26): active membership, gym open now, not a holiday."""
+    acc = await load_access(db, user, workspace_id)
+    p = await _me_member(db, acc)
+    today = _today()
+    active = (await db.execute(text(
+        f"SELECT 1 FROM {S}gym_memberships WHERE member_profile_id = :p AND status = 'active' AND start_date <= :t AND expiry_date >= :t"),
+        {"p": p["id"], "t": today})).first() is not None
+    block = _checkin_block(await _today_rules(db, p["branch_id"]), active, False)
+    if block:
+        raise HTTPException(status_code=400, detail=block)
+    await _geo_check(db, p["branch_id"], req.lat if req else None, req.lng if req else None)  #Added By Nikhil 22Nov26 20:53 For location check-in (member)
+    try:
+        async with db.begin_nested():
+            await db.execute(text(
+                f"INSERT INTO {S}gym_member_attendance (branch_id, member_profile_id, check_in_at, checked_in_by) VALUES (:b, :p, :now, :u)"),
+                {"b": p["branch_id"], "p": p["id"], "now": now_tz(), "u": user.id})
+    except IntegrityError:
+        raise HTTPException(status_code=400, detail="You are already checked in")
+    await db.commit()
+    return {"status": "checked_in"}
+
+
+@router.post("/me/visit/checkout")
+async def my_visit_checkout(workspace_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    acc = await load_access(db, user, workspace_id)
+    p = await _me_member(db, acc)
+    res = await db.execute(text(
+        f"UPDATE {S}gym_member_attendance SET check_out_at = :now, checked_out_by = :u, updated_at = :now "
+        "WHERE member_profile_id = :p AND check_out_at IS NULL"), {"now": now_tz(), "u": user.id, "p": p["id"]})
+    if res.rowcount == 0:
+        raise HTTPException(status_code=400, detail="You are not checked in")
+    await db.commit()
+    return {"status": "checked_out"}
+
+
+@router.get("/me/visits")
+async def my_visits(workspace_id: str, month: str | None = None, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    acc = await load_access(db, user, workspace_id)
+    p = await _me_member(db, acc)
+    d1, d2, label = _month_range(month)
+    s, _ = _day_bounds(d1)
+    _, e = _day_bounds(d2)
+    tz = now_tz().tzinfo
+    rows = (await db.execute(text(
+        f"SELECT check_in_at, check_out_at FROM {S}gym_member_attendance WHERE member_profile_id = :p "
+        "AND check_in_at >= :s AND check_in_at < :e ORDER BY check_in_at DESC"), {"p": p["id"], "s": s, "e": e})).mappings().all()
+    visits = [{"check_in_at": r["check_in_at"].astimezone(tz).isoformat(),
+               "check_out_at": r["check_out_at"].astimezone(tz).isoformat() if r["check_out_at"] else None,
+               "minutes": int((r["check_out_at"] - r["check_in_at"]).total_seconds() // 60) if r["check_out_at"] else None} for r in rows]
+    return {"month": label, "visits": visits, "count": len(visits), "days": len({v["check_in_at"][:10] for v in visits})}
+
+
+@router.get("/me/payments")
+async def my_payments(workspace_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    acc = await load_access(db, user, workspace_id)
+    p = await _me_member(db, acc)
+    today = _today()
+    pays = (await db.execute(text(f"""
+        SELECT g.id, g.amount_paise, g.method, g.reference_last_digits, g.status, g.paid_on, g.verified_at, ms.plan_name
+          FROM {S}gym_payments g LEFT JOIN {S}gym_memberships ms ON ms.id = g.membership_id
+         WHERE g.member_profile_id = :p AND g.status <> 'cancelled' ORDER BY g.paid_on DESC, g.created_at DESC"""), {"p": p["id"]})).mappings().all()
+    hist = (await db.execute(text(f"""
+        SELECT ms.id, ms.plan_name, ms.start_date, ms.expiry_date, ms.total_amount_paise, ms.status,
+               (SELECT sum(amount_paise) FROM {S}gym_payments g WHERE g.membership_id = ms.id AND g.status = 'verified') AS paid,
+               (SELECT sum(amount_paise) FROM {S}gym_payments g WHERE g.membership_id = ms.id AND g.status = 'pending') AS pending
+          FROM {S}gym_memberships ms WHERE ms.member_profile_id = :p ORDER BY ms.start_date DESC"""), {"p": p["id"]})).mappings().all()
+    return {
+        "member_code": p["member_code"],
+        "payments": [{"id": str(r["id"]), "amount": r["amount_paise"] / 100, "method": r["method"],
+                      "reference": f"••{r['reference_last_digits']}" if r["reference_last_digits"] else None, "status": r["status"],
+                      "paid_on": r["paid_on"].isoformat(), "towards": r["plan_name"],
+                      "verified_on": r["verified_at"].astimezone(now_tz().tzinfo).date().isoformat() if r["verified_at"] else None} for r in pays],
+        "memberships": [_ms_out(m, today) for m in hist],
+    }
+
+
+@router.get("/me/renew-options")
+async def my_renew_options(workspace_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    acc = await load_access(db, user, workspace_id)
+    p = await _me_member(db, acc)
+    plans = (await db.execute(text(
+        f"SELECT id, name, duration_months, price_paise, description FROM {S}gym_plans WHERE branch_id = :b AND status = 'active' "
+        "ORDER BY duration_months, price_paise"), {"b": p["branch_id"]})).mappings().all()
+    upi = (await db.execute(text(f"SELECT upi_id, upi_payee_name FROM {S}gym_branch_settings WHERE branch_id = :b"),
+                            {"b": p["branch_id"]})).mappings().first()
+    return {"plans": [{"id": str(r["id"]), "name": r["name"], "months": r["duration_months"], "price": r["price_paise"] / 100,
+                       "description": r["description"]} for r in plans],
+            "upi_id": upi["upi_id"] if upi else None, "upi_payee_name": upi["upi_payee_name"] if upi else None}
+
+
+class RenewRequest(BaseModel):
+    plan_id: str
+    reference_last_digits: str = Field(..., min_length=4, max_length=6, pattern=r"^[0-9A-Za-z]+$")
+
+
+@router.post("/me/renew", status_code=201)
+async def my_renew(workspace_id: str, req: RenewRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Member says "I paid the gym by UPI". Server takes the amount from the plan (never from the app); the payment stays
+    PENDING until the owner / a manager verifies it and assigns the plan."""
+    acc = await load_access(db, user, workspace_id)
+    p = await _me_member(db, acc)
+    plan = (await db.execute(text(
+        f"SELECT id, name, price_paise FROM {S}gym_plans WHERE id = :x AND branch_id = :b AND status = 'active'"),
+        {"x": _uuid(req.plan_id, "Plan"), "b": p["branch_id"]})).mappings().first()
+    if not plan:
+        raise HTTPException(status_code=400, detail="Pick a plan of your branch")
+    if plan["price_paise"] <= 0:
+        raise HTTPException(status_code=400, detail="This plan has no price. Please contact the gym.")
+    open_req = (await db.execute(text(
+        f"SELECT 1 FROM {S}gym_payments WHERE member_profile_id = :p AND status = 'pending' AND membership_id IS NULL "
+        "AND notes LIKE 'Renewal request:%'"), {"p": p["id"]})).first()
+    if open_req:
+        raise HTTPException(status_code=400, detail="You already have a renewal waiting for the gym to confirm")
+    pid = (await db.execute(text(
+        f"INSERT INTO {S}gym_payments (branch_id, member_profile_id, membership_id, amount_paise, method, reference_last_digits, status, "
+        "paid_on, notes, recorded_by, created_by, modified_by) VALUES (:b, :m, NULL, :a, 'upi', :ref, 'pending', :d, :n, :u, :u, :u) RETURNING id"),
+        {"b": p["branch_id"], "m": p["id"], "a": plan["price_paise"], "ref": req.reference_last_digits, "d": _today(),
+         "n": f"Renewal request: {plan['name']}", "u": user.id})).scalar_one()
+    staff = (await db.execute(text(f"""
+        SELECT DISTINCT wm.user_id FROM {S}workspace_members wm
+          JOIN {S}module_role_permissions rp ON rp.role_id = wm.role_id
+          JOIN {S}module_permissions mp ON mp.id = rp.permission_id AND mp.code = 'gym.payments.verify'
+         WHERE wm.workspace_id = :w AND wm.status = 'active' AND (wm.branch_id = :b OR wm.branch_id IS NULL)"""),
+        {"w": acc.workspace.id, "b": p["branch_id"]})).scalars().all()
+    audit(db, user, "member.renew_requested", "gym_payments", pid, acc.workspace.id, {"plan": plan["name"]})
+    await notify_users(db, [u for u in staff if u != user.id], category="payment",
+                       title=f"Renewal payment to verify ({p['branch_name']})",
+                       message=f"{user.first_name} {user.last_name} ({p['member_code']}) paid ₹{plan['price_paise'] // 100} by UPI for {plan['name']}. "
+                               "Verify it in Payments, then assign the plan.",
+                       workspace_id=acc.workspace.id, branch_id=p["branch_id"], actor_id=user.id)
+    await db.commit()
+    return {"status": "pending", "amount": plan["price_paise"] / 100, "plan": plan["name"]}
+
+
+@router.get("/me/gym-info")
+async def my_gym_info(workspace_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Timings, upcoming holidays and contact of the caller's branch (any role in this business)."""
+    acc = await load_access(db, user, workspace_id)
+    bid = next((r.branch_id for r in acc.roles if r.branch_id), None)
+    if bid is None:
+        brs = await _branches(db, acc)
+        if not brs:
+            raise HTTPException(status_code=404, detail="No branch found")
+        bid = brs[0]["id"]
+    b = (await db.execute(text(f"SELECT name, address, phone FROM {S}workspace_branches WHERE id = :b"), {"b": bid})).mappings().first()
+    hours = (await db.execute(text(
+        f"SELECT weekday, is_closed, open_time, close_time FROM {S}gym_branch_hours WHERE branch_id = :b ORDER BY weekday"),
+        {"b": bid})).mappings().all()
+    hols = (await db.execute(text(
+        f"SELECT holiday_date, reason FROM {S}gym_holidays WHERE branch_id = :b AND is_active AND holiday_date >= :t ORDER BY holiday_date LIMIT 10"),
+        {"b": bid, "t": _today()})).mappings().all()
+    upi = (await db.execute(text(f"SELECT upi_id, upi_payee_name FROM {S}gym_branch_settings WHERE branch_id = :b"), {"b": bid})).mappings().first()
+    return {"gym": acc.workspace.name, "branch": b["name"], "address": b["address"], "phone": b["phone"],
+            "hours": [{"weekday": h["weekday"], "closed": h["is_closed"], "open": _t(h["open_time"]), "close": _t(h["close_time"])} for h in hours],
+            "holidays": [{"date": h["holiday_date"].isoformat(), "reason": h["reason"]} for h in hols],
+            "upi_id": upi["upi_id"] if upi else None, "upi_payee_name": upi["upi_payee_name"] if upi else None}
+#Added By Nikhil 22Nov26 17:36 For member screens: home, check-in/out, visits, payments, renew, gym info END
+
+
+#Added By Nikhil 22Nov26 20:53 For "Inside now" / "Visits today" lists (who checked in) START
+@router.get("/visits")
+async def list_visits(workspace_id: str, date_: str | None = Query(None, alias="date"), branch_id: str | None = None,
+                      inside: bool = False, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """inside=true → everyone checked in and not yet out (same rule as the 'Inside now' count); else the visits of one day."""
+    acc = await load_access(db, user, workspace_id)
+    ids = await _scope(db, acc, branch_id, "gym.attendance.view")
+    try:
+        d = date.fromisoformat(date_) if date_ else _today()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Date must look like 2026-11-22")
+    s, e = _day_bounds(d)
+    rows = (await db.execute(text(f"""
+        SELECT a.check_in_at, a.check_out_at, p.id AS profile_id, p.member_code, b.name AS branch_name, u.first_name, u.last_name
+          FROM {S}gym_member_attendance a
+          JOIN {S}gym_member_profiles p ON p.id = a.member_profile_id
+          JOIN {S}workspace_members wm ON wm.id = p.workspace_member_id
+          JOIN {S}users u ON u.id = wm.user_id
+          JOIN {S}workspace_branches b ON b.id = a.branch_id
+         WHERE a.branch_id = ANY(:b)
+           AND (CASE WHEN :inside THEN a.check_out_at IS NULL ELSE a.check_in_at >= :s AND a.check_in_at < :e END)
+         ORDER BY a.check_in_at DESC"""), {"b": ids, "inside": inside, "s": s, "e": e})).mappings().all()
+    tz = now_tz().tzinfo
+    today = _today()
+    items = [{
+        "profile_id": str(r["profile_id"]), "name": f"{r['first_name']} {r['last_name']}", "member_code": r["member_code"],
+        "branch_name": r["branch_name"], "check_in_at": r["check_in_at"].astimezone(tz).isoformat(),
+        "check_out_at": r["check_out_at"].astimezone(tz).isoformat() if r["check_out_at"] else None,
+        "minutes": int((r["check_out_at"] - r["check_in_at"]).total_seconds() // 60) if r["check_out_at"] else None,
+        "inside": r["check_out_at"] is None,
+        "forgot_checkout": r["check_out_at"] is None and r["check_in_at"].astimezone(tz).date() < today,
+    } for r in rows]
+    return {"date": d.isoformat(), "inside_only": inside, "visits": items, "count": len(items)}
+#Added By Nikhil 22Nov26 20:53 For "Inside now" / "Visits today" lists (who checked in) END

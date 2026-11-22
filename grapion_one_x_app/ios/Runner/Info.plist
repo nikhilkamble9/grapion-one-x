@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!--Added By Nikhil 22Nov26 20:53 For location check-in (asked only when checking in at the gym)-->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location is checked only when you tap Check In, to confirm you are at the gym.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
