@@ -12,6 +12,7 @@ import '../auth/login_screen.dart';
 import '../subscription/store_screen.dart';
 import '../../widgets/announcement_banner.dart'; //Added By Nikhil 22Nov26 08:35 For Help & support card
 import 'edit_profile_screen.dart'; //Added By Nikhil 22Nov26 17:36 For Edit Profile page + initials avatar
+import 'package:package_info_plus/package_info_plus.dart'; //Added By Nikhil 22Nov26 23:30 For installed app version footer
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -388,6 +389,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
+                const AppVersionText(), //Added By Nikhil 22Nov26 23:30 For installed app version footer
               ],
             ],
           ),
@@ -914,3 +916,30 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   }
 }
 //Added By Nikhil 22Nov26 16:52 For Change Password on its own page (opened from Profile → Security) END
+
+//Added By Nikhil 22Nov26 23:30 For installed app version footer START
+/// "Version 1.0.0 (1)" — read from the installed app (pubspec `version: 1.0.0+1`), so support can ask which build a user has.
+class AppVersionText extends StatelessWidget {
+  const AppVersionText({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PackageInfo>(
+      future: PackageInfo.fromPlatform(),
+      builder: (context, snap) {
+        final info = snap.data;
+        if (info == null) return const SizedBox(height: 24);
+        return Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 16),
+          child: Center(
+            child: Text(
+              'Version ${info.version} (${info.buildNumber})',
+              style: const TextStyle(fontSize: 12, color: AppTheme.textSubtle),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+//Added By Nikhil 22Nov26 23:30 For installed app version footer END

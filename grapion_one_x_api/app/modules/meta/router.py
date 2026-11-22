@@ -43,3 +43,34 @@ async def live_announcements(user: User = Depends(get_current_user), db: AsyncSe
     )).scalars().all()
     return {"announcements": [{"id": str(a.id), "title": a.title, "message": a.message, "style": a.style} for a in rows]}
 #Added By Nikhil 22Nov26 08:35 For support contact (public) + live announcement banners (signed in) END
+
+
+#Added By Nikhil 22Nov26 23:30 For app version (release history; phase-2 forced update) START
+from fastapi import HTTPException, Query  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+
+from app.core.config import settings  # noqa: E402
+
+
+@router.get("/app-version")
+async def app_version(platform: str = Query(..., pattern="^(android|ios|web|api)$"), db: AsyncSession = Depends(get_db)):
+    # Public: an app checks this before (or without) signing in. Holds no user data.
+    cur = (await db.execute(text(
+        "SELECT version, build_number, released_at, release_notes FROM grapion_one_x.app_releases "
+        "WHERE platform = :p AND is_current"), {"p": platform})).first()
+    if cur is None:
+        raise HTTPException(status_code=404, detail="No release recorded for this platform")
+    # Phase 2: an installed build below min_build must update before it can be used.
+    min_build = (await db.execute(text(
+        "SELECT COALESCE(MAX(build_number), 0) FROM grapion_one_x.app_releases "
+        "WHERE platform = :p AND force_update AND build_number <= :b"), {"p": platform, "b": cur.build_number})).scalar_one()
+    return {
+        "platform": platform,
+        "version": cur.version,
+        "build_number": cur.build_number,
+        "released_at": cur.released_at.astimezone(ZoneInfo(settings.APP_TIMEZONE)).isoformat(),  # server time zone (IST)
+        "release_notes": cur.release_notes,
+        "min_build": min_build,
+    }
+#Added By Nikhil 22Nov26 23:30 For app version (release history; phase-2 forced update) END

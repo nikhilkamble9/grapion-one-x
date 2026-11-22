@@ -43,6 +43,7 @@ dependencies:
   firebase_core: ^5.2.0 #Added By Nikhil 22Nov26 00:10 For push notifications
   firebase_messaging: ^17.1.0 #Added By Nikhil 22Nov26 00:10 For push notifications
   geolocator: ^14.1.2 #Added By Nikhil 22Nov26 20:53 For location check-in (MIT, no API key)
+  package_info_plus: ^10.2.2 #Added By Nikhil 22Nov26 23:30 For installed app version in Profile (BSD-3, Flutter Favorite)
 dev_dependencies:
   flutter_test:
     sdk: flutter

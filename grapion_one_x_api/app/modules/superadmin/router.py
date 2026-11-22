@@ -367,3 +367,60 @@ async def update_announcement(announcement_id: str, req: AnnouncementRequest, me
     await db.commit()
     return _announcement_out(a)
 #Added By Nikhil 22Nov26 08:35 For Platform Settings (support contact, reminder days) + announcement banners END
+
+
+#Added By Nikhil 22Nov26 23:30 For app release history (record each Play Store / web / API release) START
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.exc import IntegrityError  # noqa: E402
+
+
+class ReleaseRequest(BaseModel):
+    platform: str = Field(..., pattern="^(android|ios|web|api)$")
+    version: str = Field(..., pattern=r"^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,4}$")
+    build_number: int = Field(..., ge=1, le=2_000_000_000)
+    git_commit: str | None = Field(None, pattern="^[0-9a-f]{7,40}$")
+    release_notes: str | None = Field(None, max_length=1000)
+    force_update: bool = False
+    make_current: bool = True
+
+
+def _release_out(r) -> dict:
+    return {
+        "id": str(r.id), "platform": r.platform, "version": r.version, "build_number": r.build_number,
+        "git_commit": r.git_commit, "release_notes": r.release_notes, "is_current": r.is_current,
+        "force_update": r.force_update, "released_at": r.released_at.astimezone(TZ).isoformat(),
+    }
+
+
+@router.get("/releases")
+async def list_releases(me: User = Depends(require_super_admin), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(text(
+        "SELECT id, platform, version, build_number, git_commit, release_notes, is_current, force_update, released_at "
+        "FROM grapion_one_x.app_releases ORDER BY platform, build_number DESC"))).all()
+    return {"releases": [_release_out(r) for r in rows]}
+
+
+@router.post("/releases", status_code=201)
+async def create_release(req: ReleaseRequest, me: User = Depends(require_super_admin), db: AsyncSession = Depends(get_db)):
+    # Play Store rule: every upload needs a higher build number (versionCode) than the last one.
+    last = (await db.execute(text(
+        "SELECT COALESCE(MAX(build_number), 0) FROM grapion_one_x.app_releases WHERE platform = :p"),
+        {"p": req.platform})).scalar_one()
+    if req.build_number <= last:
+        raise HTTPException(status_code=400, detail=f"Build number must be higher than {last} (the last {req.platform} build)")
+    try:
+        if req.make_current:
+            await db.execute(text("UPDATE grapion_one_x.app_releases SET is_current = FALSE WHERE platform = :p AND is_current"),
+                             {"p": req.platform})
+        row = (await db.execute(text(
+            "INSERT INTO grapion_one_x.app_releases (platform, version, build_number, git_commit, release_notes, is_current, force_update, released_at, created_by) "
+            "VALUES (:platform, :version, :build_number, :git_commit, :release_notes, :is_current, :force_update, :at, :by) "
+            "RETURNING id, platform, version, build_number, git_commit, release_notes, is_current, force_update, released_at"),
+            {**req.model_dump(exclude={"make_current"}), "is_current": req.make_current, "at": now_tz(), "by": me.id})).first()
+        audit(db, me, "app_release.created", "app_releases", row.id, detail=req.model_dump())
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="This release is already recorded")
+    return _release_out(row)
+#Added By Nikhil 22Nov26 23:30 For app release history (record each Play Store / web / API release) END
