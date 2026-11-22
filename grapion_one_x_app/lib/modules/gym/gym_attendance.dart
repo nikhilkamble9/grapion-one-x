@@ -173,6 +173,7 @@ class _MyShiftCardState extends State<MyShiftCard> {
                             if (_inOut(s).isNotEmpty) _inOut(s),
                             if (s['status'] == 'pending' && s['can_check_in'] != true) 'Check-in opens at ${time12(s['check_in_opens'])}',
                             if (s['holiday'] != null) '🏖️ ${s['holiday']}',
+                            if (s['check_in_closed'] == true) 'Check-in closed — shift ended at ${time12(s['end_time'])}', //Added By Nikhil 22Nov26 23:41 For why there is no Check In button after the shift
                           ].join(' • '),
                           style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                         ),

@@ -1427,6 +1427,8 @@ def _att_out(r, now: datetime) -> dict:
         "can_check_in": can_in, "can_check_out": working, "check_in_opens": _t(opens.time()),
         "extra_day": not works,  #Added By Nikhil 22Nov26 20:53 For week-off check-in shown as an extra day
         "location_required": bool(r["geo"]),  #Added By Nikhil 22Nov26 20:53 For location check-in (app asks for GPS only when needed)
+        "check_in_closed": (d == now.date() and not r["holiday"] and not (rec and (rec["check_in_at"] or rec["corrected_by"]))
+                            and now >= ends),  #Added By Nikhil 22Nov26 23:41 For "check-in closed, shift ended" hint (server time)
     }
 
 
