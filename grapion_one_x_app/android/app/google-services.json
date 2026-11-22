@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "203313656499",
+    "project_id": "gonex-75fab",
+    "storage_bucket": "gonex-75fab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:203313656499:android:0c2bcfaa7a49ca8cdf76c6",
+        "android_client_info": {
+          "package_name": "com.grapiondigital.gonex"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7kPbiFhJ_HVd3oJfuaZXVoktTqzRj1EE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

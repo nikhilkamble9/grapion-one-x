@@ -1,0 +1,16 @@
+# //Added By Nikhil 18Nov26 21:16 For G.One.X backend dependencies
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+alembic==1.14.0
+PyJWT==2.10.1
+argon2-cffi==23.1.0
+python-multipart==0.0.19
+httpx==0.28.1
+tzdata==2024.2
+email-validator==2.4.0
+firebase-admin==6.9.0  #Added By Nikhil 22Nov26 00:10 For push notifications (Apache-2.0, Google)

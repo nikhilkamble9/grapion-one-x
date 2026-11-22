@@ -1,0 +1,1572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>G.One.X — Complete Flow & Multi-Currency Engine</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-page: #F3F5F9;
+      --bg-card: #FFFFFF;
+      --bg-card-subtle: #F8FAFC;
+      --text-main: #0F172A;
+      --text-muted: #64748B;
+      --primary: #10B981;
+      --primary-dark: #059669;
+      --primary-subtle: #ECFDF5;
+      --accent: #2563EB;
+      --pill-dark: #0F172A;
+      --border-subtle: #E2E8F0;
+      --shadow-float: 0 25px 50px -12px rgba(0, 0, 0, 0.12), 0 0 1px 1px rgba(0,0,0,0.03);
+      --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.04);
+      --radius-xl: 36px;
+      --radius-lg: 24px;
+      --radius-md: 16px;
+      --radius-pill: 9999px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+    body { background: var(--bg-page); color: var(--text-main); padding: 24px 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    
+    header { text-align: center; margin-bottom: 20px; }
+    header h1 { font-size: 28px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px; font-family: 'Orbitron', sans-serif; }
+    header p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+    
+    .nav-pills { display: flex; gap: 8px; margin-bottom: 24px; background: #E2E8F0; padding: 5px; border-radius: var(--radius-pill); flex-wrap: wrap; justify-content: center; }
+    .nav-pill { padding: 9px 18px; border-radius: var(--radius-pill); font-size: 13px; font-weight: 600; border: none; background: transparent; color: #475569; cursor: pointer; transition: all 0.2s ease; }
+    .nav-pill.active { background: white; color: #0F172A; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+
+    .showcase { display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; max-width: 1300px; width: 100%; }
+
+    /* Phone Shell */
+    .phone {
+      width: 380px;
+      height: 780px;
+      background: white;
+      border-radius: 46px;
+      box-shadow: var(--shadow-float);
+      border: 9px solid #0F172A;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .status-bar {
+      height: 44px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 24px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #0F172A;
+      z-index: 60;
+    }
+    .status-bar.dark-mode { color: white; }
+    .dynamic-island {
+      width: 100px;
+      height: 24px;
+      background: #0F172A;
+      border-radius: 20px;
+      margin: 0 auto;
+    }
+
+    .screen-content {
+      flex: 1;
+      padding: 16px 22px 24px 22px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .screen-content::-webkit-scrollbar { display: none; }
+
+    
+    .screen-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    
+    /* DOCSPOT FLOATING DOCK BAR */
+    .admin-dock-container {
+      position: absolute;
+      bottom: 18px;
+      left: 20px;
+      right: 20px;
+      background: #0F172A;
+      border-radius: 99px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.35);
+      z-index: 15;
+    }
+    .admin-dock-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 99px;
+      color: #94A3B8;
+      font-size: 13px;
+      font-weight: 700;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .admin-dock-item.active {
+      background: white;
+      color: #0F172A;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .admin-dock-item svg {
+      width: 18px;
+      height: 18px;
+      stroke-width: 2.2;
+    }
+
+    
+    /* TAB TRANSITION ANIMATIONS */
+    .tab-pane-animated {
+      animation: tabSlideFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    @keyframes tabSlideFadeIn {
+      0% {
+        opacity: 0;
+        transform: translateY(12px) scale(0.985);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+    
+    /* IN-DEVELOPMENT MODAL OVERLAY */
+    .dev-modal-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(5px);
+      z-index: 50;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      border-radius: 38px;
+    }
+    .dev-modal-card {
+      background: white;
+      border-radius: 24px;
+      padding: 26px 20px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+      border: 1px solid #F1F5F9;
+      animation: modalPopIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+      width: 100%;
+    }
+    @keyframes modalPopIn {
+      0% { transform: scale(0.85); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    .screen-title { font-size: 22px; font-weight: 800; color: #0F172A; letter-spacing: -0.5px; }
+    .screen-subtitle { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+    .pill-btn {
+      background: var(--pill-dark);
+      color: white;
+      padding: 14px 24px;
+      border-radius: var(--radius-pill);
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      width: 100%;
+      text-decoration: none;
+    }
+    .pill-btn:hover { background: #000; transform: translateY(-1px); }
+    .pill-btn.secondary { background: #F1F5F9; color: #334155; }
+    .pill-btn.accent { background: var(--primary); color: white; }
+
+    .doc-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      box-shadow: var(--shadow-card);
+      border: 1px solid #F1F5F9;
+      margin-bottom: 14px;
+    }
+
+    /* STEP PROGRESS BAR */
+    .step-bar-container { display: flex; gap: 8px; margin-bottom: 20px; }
+    .step-indicator { flex: 1; height: 4px; background: #E2E8F0; border-radius: 99px; transition: all 0.3s; }
+    .step-indicator.active { background: var(--primary); }
+
+    /* RECEIPT STYLE CARD */
+    .receipt-container {
+      background: white;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 24px;
+      padding: 24px 20px;
+      box-shadow: 0 15px 35px -10px rgba(0,0,0,0.06);
+      position: relative;
+      margin-top: 10px;
+      background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+    }
+    .receipt-notch-left, .receipt-notch-right {
+      position: absolute;
+      top: 140px;
+      width: 20px;
+      height: 20px;
+      background: #F3F5F9;
+      border-radius: 50%;
+    }
+    .receipt-notch-left { left: -11px; }
+    .receipt-notch-right { right: -11px; }
+    .receipt-divider { margin: 24px 0; border-top: 2px dashed #CBD5E1; }
+
+    /* FULLY HIDDEN TEASER PRICE BADGE */
+    .teaser-locked-badge {
+      font-size: 11px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #F1F5F9;
+      color: #64748B;
+      padding: 6px 12px;
+      border-radius: var(--radius-pill);
+      border: 1px solid #E2E8F0;
+      letter-spacing: 0.5px;
+    }
+    .teaser-lock-icon { font-size: 12px; }
+
+    .input-group { margin-bottom: 14px; }
+    .input-label { font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px; display: block; }
+    .doc-input {
+      width: 100%;
+      padding: 14px 18px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-card-subtle);
+      font-size: 14px;
+      color: #0F172A;
+      outline: none;
+    }
+    .doc-input:focus { border-color: #0F172A; background: white; }
+
+    /* COUNTRY PHONE INPUT */
+    .country-phone-row { display: flex; gap: 8px; }
+    .country-select {
+      width: 110px;
+      padding: 14px 10px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: white;
+      font-size: 13px;
+      font-weight: 700;
+      color: #0F172A;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .period-tabs { display: flex; gap: 6px; background: #F1F5F9; padding: 4px; border-radius: var(--radius-pill); margin-bottom: 16px; }
+    .period-tab { flex: 1; padding: 8px 4px; text-align: center; font-size: 11px; font-weight: 700; border-radius: var(--radius-pill); border: none; background: transparent; color: #64748B; cursor: pointer; }
+    .period-tab.active { background: white; color: #0F172A; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+
+    .sale-banner {
+      background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+      border: 1px solid #FDE68A;
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sale-title { font-size: 12px; font-weight: 800; color: #B45309; display: flex; align-items: center; gap: 6px; }
+    .sale-date { font-size: 10px; font-weight: 600; color: #D97706; }
+
+    .module-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      background: #F8FAFC;
+      border: 1.5px solid #F1F5F9;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .module-item.active { border-color: var(--primary); background: #F0FDF4; }
+    .module-icon { width: 42px; height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 20px; background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
+    .module-info { flex: 1; margin-left: 12px; }
+    .module-name { font-size: 14px; font-weight: 700; color: #0F172A; }
+    .module-desc { font-size: 11px; color: var(--text-muted); }
+    .module-pricing { text-align: right; }
+    .module-price-original { font-size: 11px; text-decoration: line-through; color: #94A3B8; font-weight: 600; }
+    .module-price { font-size: 14px; font-weight: 800; color: #0F172A; }
+    .checkbox-pill { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #CBD5E1; display: flex; align-items: center; justify-content: center; margin-left: 10px; font-size: 12px; color: white; }
+    .module-item.active .checkbox-pill { background: var(--primary); border-color: var(--primary); }
+
+    .floating-bar { margin-top: auto; padding-top: 14px; border-top: 1px solid #F1F5F9; display: flex; flex-direction: column; gap: 10px; }
+    .badge-discount { display: inline-block; padding: 2px 7px; background: #FEF2F2; color: #DC2626; border-radius: var(--radius-pill); font-size: 10px; font-weight: 700; }
+
+    /* Modal Sheet */
+    .sheet-modal { background: white; border-radius: 28px 28px 0 0; padding: 24px; box-shadow: 0 -10px 30px rgba(0,0,0,0.1); border-top: 1px solid #F1F5F9; position: absolute; bottom: 0; left: 0; right: 0; z-index: 20; }
+    .sheet-drag { width: 36px; height: 4px; background: #E2E8F0; border-radius: 4px; margin: 0 auto 16px auto; }
+
+    /* STARTUP ANIMATION */
+    .splash-container {
+      background: radial-gradient(circle at 50% 40%, #0D1629 0%, #040711 100%);
+      color: white;
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 50px 24px 30px 24px;
+      z-index: 50;
+      perspective: 1000px;
+      overflow: hidden;
+      transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .splash-container.fading-out { opacity: 0; transform: scale(1.08); pointer-events: none; }
+    .cyber-grid { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background-image: linear-gradient(rgba(16, 185, 129, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(37, 99, 235, 0.05) 1px, transparent 1px); background-size: 40px 40px; transform: rotateX(60deg) translateZ(-100px); animation: gridFly 15s linear infinite; pointer-events: none; }
+    @keyframes gridFly { 0% { transform: rotateX(60deg) translateY(0); } 100% { transform: rotateX(60deg) translateY(40px); } }
+    .kinetic-stage { position: relative; width: 170px; height: 170px; display: flex; align-items: center; justify-content: center; margin-top: 60px; transform-style: preserve-3d; }
+    .gyro-ring { position: absolute; border-radius: 50%; transform-style: preserve-3d; }
+    .gyro-1 { width: 160px; height: 160px; border: 1.5px dashed rgba(56, 189, 248, 0.6); animation: gyroRotate1 6s linear infinite; box-shadow: 0 0 20px rgba(56, 189, 248, 0.2); }
+    .gyro-2 { width: 135px; height: 135px; border: 2px solid transparent; border-top: 2px solid #10B981; border-bottom: 2px solid #10B981; animation: gyroRotate2 4s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+    .gyro-3 { width: 110px; height: 110px; border: 1px dotted rgba(245, 158, 11, 0.7); animation: gyroRotate3 8s linear infinite reverse; }
+    @keyframes gyroRotate1 { 0% { transform: rotateX(65deg) rotateY(15deg) rotateZ(0deg); } 100% { transform: rotateX(65deg) rotateY(15deg) rotateZ(360deg); } }
+    @keyframes gyroRotate2 { 0% { transform: rotateX(30deg) rotateY(70deg) rotateZ(0deg); } 100% { transform: rotateX(30deg) rotateY(70deg) rotateZ(-360deg); } }
+    @keyframes gyroRotate3 { 0% { transform: rotateX(-45deg) rotateY(-45deg) rotateZ(0deg); } 100% { transform: rotateX(-45deg) rotateY(-45deg) rotateZ(360deg); } }
+    .core-crystal { position: relative; width: 86px; height: 86px; background: radial-gradient(circle at 35% 30%, #1E293B 0%, #030712 100%); border-radius: 26px; border: 2px solid rgba(245, 158, 11, 0.8); display: flex; align-items: center; justify-content: center; box-shadow: 0 0 40px rgba(16, 185, 129, 0.4), inset 0 0 15px rgba(255,255,255,0.2); transform: translateZ(30px); animation: crystalFloat 3s ease-in-out infinite; }
+    @keyframes crystalFloat { 0%, 100% { transform: translateZ(30px) translateY(0); } 50% { transform: translateZ(45px) translateY(-6px); } }
+    .emblem-letter-g { font-family: 'Orbitron', sans-serif; font-size: 42px; font-weight: 900; background: linear-gradient(180deg, #FDE68A 0%, #F59E0B 70%, #B45309 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 14px rgba(245, 158, 11, 0.8)); line-height: 1; }
+    .satellite-x { position: absolute; bottom: -6px; right: -6px; width: 28px; height: 28px; background: linear-gradient(135deg, #10B981, #059669); border-radius: 9px; display: flex; align-items: center; justify-content: center; font-family: 'Orbitron', sans-serif; font-size: 13px; font-weight: 900; color: white; border: 2px solid #030712; box-shadow: 0 0 15px #10B981; animation: pulseLaser 1.5s ease-in-out infinite; }
+    @keyframes pulseLaser { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); box-shadow: 0 0 25px #10B981, 0 0 45px rgba(56, 189, 248, 0.9); } }
+    .laser-flare { position: absolute; width: 140px; height: 2px; background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.8), transparent); animation: flareSweep 2.5s ease-in-out infinite; pointer-events: none; }
+    @keyframes flareSweep { 0% { transform: rotate(0deg) scaleX(0.2); opacity: 0; } 50% { transform: rotate(180deg) scaleX(1); opacity: 0.8; } 100% { transform: rotate(360deg) scaleX(0.2); opacity: 0; } }
+    .brand-reveal-wrap { margin-top: 26px; text-align: center; }
+    .brand-glitch-title { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 4px; color: #FFFFFF; text-shadow: 0 0 20px rgba(255,255,255,0.3); }
+    .brand-glitch-title .x-glow { color: #10B981; text-shadow: 0 0 20px #10B981; }
+    .brand-sub-badge { font-size: 10px; font-weight: 700; letter-spacing: 2.5px; color: #38BDF8; text-transform: uppercase; margin-top: 6px; }
+    .auto-progress-container { margin-top: 22px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .loader-track { width: 150px; height: 4px; background: rgba(255, 255, 255, 0.1); border-radius: 99px; overflow: hidden; }
+    .loader-fill-timed { height: 100%; width: 0%; background: linear-gradient(90deg, #10B981, #38BDF8, #F59E0B); border-radius: 99px; animation: fillTimeline 4.2s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+    @keyframes fillTimeline { 0% { width: 0%; } 100% { width: 100%; } }
+    .auto-skip-notice { font-size: 10px; font-weight: 600; color: #64748B; letter-spacing: 0.5px; }
+    .splash-credits { text-align: center; display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+    .credit-main { font-size: 11px; font-weight: 600; color: #94A3B8; }
+    .credit-partner { font-size: 10px; font-weight: 800; color: #38BDF8; letter-spacing: 1.5px; text-transform: uppercase; }
+    .skip-splash-btn { position: absolute; top: 50px; right: 20px; background: rgba(255,255,255,0.12); backdrop-filter: blur(10px); color: white; padding: 6px 14px; border-radius: 99px; font-size: 11px; font-weight: 700; border: 1px solid rgba(255,255,255,0.2); cursor: pointer; z-index: 60; }
+  
+    /* Entire Amount Blurred Box */
+    .amount-blurred-box {
+      font-family: 'Plus Jakarta Sans', monospace;
+      font-size: 14px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      background: white;
+      padding: 6px 12px;
+      border-radius: 12px;
+      border: 1.5px solid #E2E8F0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    }
+    .currency-symbol-visible {
+      color: #0F172A;
+      font-weight: 900;
+    }
+    .amount-digits-blurred {
+      filter: blur(5px);
+      user-select: none;
+      opacity: 0.75;
+      color: #0F172A;
+      letter-spacing: 1.5px;
+      display: inline-block;
+    }
+
+  
+    /* Modern Flag Picker Input */
+    .country-trigger-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: white;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      color: #0F172A;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .flag-img {
+      width: 24px;
+      height: 16px;
+      border-radius: 3px;
+      object-fit: cover;
+      box-shadow: 0 0 1px rgba(0,0,0,0.3);
+      display: inline-block;
+    }
+    .country-modal-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: none;
+      align-items: flex-end;
+    }
+    .country-modal-sheet {
+      width: 100%;
+      height: 70%;
+      background: white;
+      border-radius: 28px 28px 0 0;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 20px 10px 20px;
+      box-shadow: 0 -10px 40px rgba(0,0,0,0.15);
+    }
+    .country-search-input {
+      width: 100%;
+      padding: 12px 16px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-card-subtle);
+      font-size: 13px;
+      color: #0F172A;
+      outline: none;
+      margin-bottom: 12px;
+    }
+    .country-list-scroll {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .country-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 8px;
+      border-bottom: 1px solid #F1F5F9;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .country-item-row:hover {
+      background: #F8FAFC;
+    }
+
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>G.One.X</h1>
+    <p>Dynamic Multi-Currency &bull; Country Code Auto-Detection &bull; 100% Locked Gate</p>
+  </header>
+
+  <div class="nav-pills">
+    <button class="nav-pill active" onclick="replaySplash()">0. 3D Startup</button>
+    <button class="nav-pill" onclick="switchView('login')">1. Sign In</button>
+    <button class="nav-pill" onclick="switchView('register')">2. Create Account (+Country Code)</button>
+    <button class="nav-pill" onclick="startForgotWizard()">3. Forgot Password</button>
+    <button class="nav-pill" onclick="switchView('gate')">4. Receipt Gate (100% Hidden)</button>
+    <button class="nav-pill" onclick="switchView('subscribe')">5. DB Store (Auto Currency)</button>
+    <button class="nav-pill" onclick="switchView('admin')">6. Admin Panel</button>
+  </div>
+
+  <div class="showcase">
+
+    <!-- Phone 0: 3D Kinetic Startup Animation with Auto-Skip -->
+    <div class="phone" id="view-splash">
+      <div class="status-bar dark-mode">
+        <span>9:41</span>
+        <div class="dynamic-island" style="background:#0F172A;"></div>
+        <span>100%</span>
+      </div>
+
+      <div class="splash-container" id="splash-layer">
+        <div class="cyber-grid"></div>
+        <button class="skip-splash-btn" onclick="executeAutoSkip()">Skip &rarr;</button>
+
+        <div style="display:flex; flex-direction:column; align-items:center;">
+          <div class="kinetic-stage">
+            <div class="gyro-ring gyro-1"></div>
+            <div class="gyro-ring gyro-2"></div>
+            <div class="gyro-ring gyro-3"></div>
+            <div class="laser-flare"></div>
+
+            <div class="core-crystal">
+              <span class="emblem-letter-g">G</span>
+              <div class="satellite-x">X</div>
+            </div>
+          </div>
+
+          <div class="brand-reveal-wrap">
+            <div class="brand-glitch-title">G.ONE.<span class="x-glow">X</span></div>
+            <div class="brand-sub-badge">Multi-Vertical Enterprise Suite</div>
+            
+            <div class="auto-progress-container">
+              <div class="loader-track">
+                <div class="loader-fill-timed" id="splash-timeline"></div>
+              </div>
+              <div class="auto-skip-notice">Opening Workspace...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="splash-credits">
+          <div class="credit-main">Designed by Grapion Digital &bull; Powered by SENJA MATRIX</div>
+          <div class="credit-partner">In Partnership with SENJA MATRIX</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone 1: Login / Auth -->
+    <div class="phone" id="view-login" style="display:none;">
+      <div class="status-bar">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <span>100%</span>
+      </div>
+      <div class="screen-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <div style="height:36px; padding:0 14px; background:#0F172A; border-radius:99px; display:flex; align-items:center; justify-content:center; gap:6px; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+            <span style="font-family:'Orbitron', sans-serif; font-size:12px; font-weight:900; color:white; letter-spacing:1px;">G.ONE.<span style="color:#10B981;">X</span></span>
+          </div>
+          <span style="font-size:12px; font-weight:700; color:#64748B; background:#F1F5F9; padding:6px 14px; border-radius:99px; cursor:pointer;" onclick="replaySplash()">▶ Replay Intro</span>
+        </div>
+
+        <div style="margin-top:10px; margin-bottom:24px;">
+          <h2 class="screen-title">Sign In to G.One.X</h2>
+          <p class="screen-subtitle">Manage your business modules & operations</p>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Username or Email</label>
+          <input type="text" class="doc-input" placeholder="e.g. nikhil_admin" value="user_gym_demo">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Password</label>
+          <input type="password" class="doc-input" placeholder="Enter password" value="••••••••••••">
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; margin-bottom:24px;">
+          <a href="javascript:startForgotWizard()" style="font-size:12px; font-weight:600; color:#2563EB; text-decoration:none;">Forgot Password?</a>
+        </div>
+
+        <button class="pill-btn" onclick="switchView('gate')">Sign In</button>
+
+        <div style="text-align:center; margin-top:20px;">
+          <span style="font-size:12px; color:var(--text-muted);">Don't have an account? </span>
+          <button type="button" onclick="switchView('register')" style="background:none; border:none; padding:0; font-size:12px; font-weight:800; color:#0F172A; text-decoration:underline; cursor:pointer;">Create Account</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone 2: Create Account / Register with Country Code Selector -->
+
+    <!-- Country Picker Modal Sheet -->
+    <div class="country-modal-overlay" id="country-picker-overlay" onclick="closeCountryPicker(event)">
+      <div class="country-modal-sheet" onclick="event.stopPropagation()">
+        <div class="sheet-drag"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="font-size:16px; font-weight:800; color:#0F172A;">Select Country & Code</h3>
+          <button onclick="closeCountryPicker()" style="background:none; border:none; font-size:18px; font-weight:700; color:#64748B; cursor:pointer;">&times;</button>
+        </div>
+        <input type="text" class="country-search-input" id="country-search-input" placeholder="🔍 Search country name or code..." oninput="filterCountries(this.value)">
+        <div class="country-list-scroll" id="country-list-scroll">
+          <!-- Dynamically populated world countries with flags -->
+        </div>
+      </div>
+    </div>
+
+    <div class="phone" id="view-register" style="display:none;">
+      <div class="status-bar">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <span>100%</span>
+      </div>
+      <div class="screen-content">
+        <div class="screen-header">
+          <button class="period-tab" onclick="switchView('login')" style="flex:none; padding:6px 14px; background:#F1F5F9;">&larr; Sign In</button>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <h2 class="screen-title">Create Account</h2>
+          <p class="screen-subtitle">Country determines dynamic currency & pricing</p>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+          <div class="input-group" style="flex:1;">
+            <label class="input-label">First Name</label>
+            <input type="text" class="doc-input" placeholder="Nikhil" value="Nikhil">
+          </div>
+          <div class="input-group" style="flex:1;">
+            <label class="input-label">Last Name</label>
+            <input type="text" class="doc-input" placeholder="Kamble" value="Kamble">
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Gmail / Email Address</label>
+          <input type="email" class="doc-input" placeholder="name@gmail.com" value="nikhil@gmail.com">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Country & Mobile Number</label>
+          <div class="country-phone-row">
+            <div class="country-trigger-btn" onclick="openCountryPicker()">
+              <img id="selected-flag-img" class="flag-img" src="https://flagcdn.com/w40/in.png" alt="IN">
+              <span id="selected-dial-text">+91</span>
+              <span style="font-size:10px; color:#64748B;">▼</span>
+            </div>
+            <input type="tel" class="doc-input" style="flex:1;" placeholder="98234 11223" value="98234 11223">
+          </div>
+          <span style="font-size:11px; color:#10B981; font-weight:700; margin-top:5px; display:block;" id="country-currency-hint">
+            ✓ Currency: Indian Rupee (₹ INR)
+          </span>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Username (Used for login)</label>
+          <input type="text" class="doc-input" placeholder="nikhil_kamble" value="nikhil_kamble">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Password</label>
+          <input type="password" class="doc-input" placeholder="Enter secure password" value="Password123#">
+        </div>
+
+        <div class="input-group">
+          <label class="input-label">Repeat Password</label>
+          <input type="password" class="doc-input" placeholder="Re-enter password" value="Password123#">
+        </div>
+
+        <div style="margin-top:10px; margin-bottom:14px;">
+          <button class="pill-btn accent" onclick="alert('Account Registered! Currency set to: ' + CURRENCIES[currentCountry].code); switchView('gate');">Register Account</button>
+        </div>
+
+        <div style="text-align:center;">
+          <span style="font-size:12px; color:var(--text-muted);">Already have an account? </span>
+          <a href="javascript:switchView('login')" style="font-size:12px; font-weight:700; color:#0F172A; text-decoration:underline;">Sign In</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone 3: 3-Step Wizard Forgot Password -->
+    <div class="phone" id="view-forgot" style="display:none;">
+      <div class="status-bar">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <span>100%</span>
+      </div>
+      <div class="screen-content">
+        <div class="screen-header">
+          <button class="period-tab" onclick="switchView('login')" style="flex:none; padding:6px 14px; background:#F1F5F9;">&larr; Cancel</button>
+          <span style="font-size:11px; font-weight:700; color:var(--text-muted);" id="forgot-step-label">Step 1 of 3</span>
+        </div>
+
+        <div class="step-bar-container">
+          <div class="step-indicator active" id="bar-step-1"></div>
+          <div class="step-indicator" id="bar-step-2"></div>
+          <div class="step-indicator" id="bar-step-3"></div>
+        </div>
+
+        <!-- FORGOT STEP 1: USERNAME -->
+        <div id="forgot-step-1">
+          <div style="margin-bottom:20px;">
+            <h2 class="screen-title">Account Recovery</h2>
+            <p class="screen-subtitle">Step 1: Enter your registered username</p>
+          </div>
+
+          <div class="input-group">
+            <label class="input-label">Registered Username</label>
+            <input type="text" class="doc-input" id="forgot-input-username" placeholder="e.g. nikhil_kamble" value="nikhil_kamble">
+          </div>
+
+          <div style="margin-top:auto; padding-top:40px;">
+            <button class="pill-btn" onclick="nextForgotStep(2)">Validate & Continue &rarr;</button>
+          </div>
+        </div>
+
+        <!-- FORGOT STEP 2: MOBILE NUMBER VALIDATION -->
+        <div id="forgot-step-2" style="display:none;">
+          <div style="margin-bottom:20px;">
+            <h2 class="screen-title">Verify Identity</h2>
+            <p class="screen-subtitle">Step 2: Enter your registered mobile number</p>
+          </div>
+
+          <div class="doc-card" style="background:#F0FDF4; border:1px solid #BBF7D0; margin-bottom:16px;">
+            <div style="font-size:11px; font-weight:700; color:#15803D;">USER VALIDATED</div>
+            <div style="font-size:13px; font-weight:800; color:#166534;" id="display-validated-user">@nikhil_kamble</div>
+          </div>
+
+          <div class="input-group">
+            <label class="input-label">Registered Mobile Number</label>
+            <input type="tel" class="doc-input" id="forgot-input-mobile" placeholder="+91 98765 43210" value="+91 98234 11223">
+          </div>
+
+          <div style="margin-top:auto; padding-top:40px; display:flex; flex-direction:column; gap:10px;">
+            <button class="pill-btn" onclick="nextForgotStep(3)">Verify Mobile & Continue &rarr;</button>
+            <button class="pill-btn secondary" onclick="nextForgotStep(1)">&larr; Back to Username</button>
+          </div>
+        </div>
+
+        <!-- FORGOT STEP 3: NEW PASSWORD & REPEAT -->
+        <div id="forgot-step-3" style="display:none;">
+          <div style="margin-bottom:20px;">
+            <h2 class="screen-title">Set New Password</h2>
+            <p class="screen-subtitle">Step 3: Create and confirm your new password</p>
+          </div>
+
+          <div class="input-group">
+            <label class="input-label">New Password</label>
+            <input type="password" class="doc-input" id="forgot-new-pwd" placeholder="Enter new password" value="NikhilNewPass2026#">
+          </div>
+
+          <div class="input-group">
+            <label class="input-label">Type Again New Password</label>
+            <input type="password" class="doc-input" id="forgot-repeat-pwd" placeholder="Type again new password" value="NikhilNewPass2026#">
+          </div>
+
+          <div style="margin-top:auto; padding-top:40px;">
+            <button class="pill-btn accent" onclick="submitPasswordReset()">Submit & Update Password</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Phone 4: RECEIPT-STYLE SUBSCRIPTION NEEDED SCREEN WITH 100% HIDDEN/LOCKED PRICES -->
+    <div class="phone" id="view-gate" style="display:none;">
+      <div class="status-bar">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <span>100%</span>
+      </div>
+      <div class="screen-content">
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h2 class="screen-title" style="font-size:20px;">Account Active</h2>
+          <div style="width:32px; height:32px; border-radius:50%; background:#F1F5F9; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800;">NK</div>
+        </div>
+
+        <div class="receipt-container">
+          <div class="receipt-notch-left"></div>
+          <div class="receipt-notch-right"></div>
+
+          <div style="text-align:center; margin-bottom:16px;">
+            <div style="width:52px; height:52px; background:#EFF6FF; color:#2563EB; border-radius:18px; display:flex; align-items:center; justify-content:center; font-size:24px; margin:0 auto 12px auto;">
+              📄
+            </div>
+            <h3 style="font-size:18px; font-weight:800; color:#0F172A;">Subscription Needed</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-top:4px;">No active service modules assigned to your account yet.</p>
+          </div>
+
+          <div class="receipt-divider"></div>
+
+          <!-- Module Rows with Currency Symbol Visible and Whole Amount Blurred Out -->
+          <div style="margin-top: 4px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; margin-bottom:10px; padding: 12px 14px; background: #F8FAFC; border-radius: 14px; border: 1px solid #F1F5F9;">
+              <span style="display:flex; align-items:center; gap:8px;"><span>🏋️</span> Grapion Gym</span>
+              <span class="amount-blurred-box"><span class="currency-symbol-visible">₹</span><span class="amount-digits-blurred">1,999</span></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; margin-bottom:10px; padding: 12px 14px; background: #F8FAFC; border-radius: 14px; border: 1px solid #F1F5F9;">
+              <span style="display:flex; align-items:center; gap:8px;"><span>💍</span> Grapion Wedding</span>
+              <span class="amount-blurred-box"><span class="currency-symbol-visible">₹</span><span class="amount-digits-blurred">2,499</span></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; margin-bottom:10px; padding: 12px 14px; background: #F8FAFC; border-radius: 14px; border: 1px solid #F1F5F9;">
+              <span style="display:flex; align-items:center; gap:8px;"><span>🩺</span> Grapion Medical</span>
+              <span class="amount-blurred-box"><span class="currency-symbol-visible">₹</span><span class="amount-digits-blurred">2,999</span></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:700; padding: 12px 14px; background: #F8FAFC; border-radius: 14px; border: 1px solid #F1F5F9;">
+              <span style="display:flex; align-items:center; gap:8px;"><span>🎓</span> Grapion Academy</span>
+              <span class="amount-blurred-box"><span class="currency-symbol-visible">₹</span><span class="amount-digits-blurred">1,799</span></span>
+            </div>
+          </div>
+
+          <div style="margin-top:24px;">
+            <button class="pill-btn accent" onclick="switchView('subscribe')">
+              Subscribe Now &rarr;
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-top:auto; text-align:center;">
+          <button type="button" onclick="switchView('login')" style="background:none; border:none; padding:8px 16px; font-size:13px; font-weight:800; color:#DC2626; cursor:pointer; text-decoration:underline;">Sign Out</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Phone 5: Module Store (100% DB-Driven with Dynamic Multi-Currency Converter) -->
+    <div class="phone" id="view-subscribe" style="display:none;">
+      <div class="status-bar">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <span>100%</span>
+      </div>
+      <div class="screen-content">
+        <div class="screen-header" style="margin-bottom:14px;">
+          <div>
+            <h2 class="screen-title">Choose Modules</h2>
+            <p class="screen-subtitle">Select services for your business</p>
+          </div>
+          <button class="period-tab" onclick="switchView('gate')" style="flex:none; padding:6px 14px; background:#F1F5F9; font-weight:700;">&larr; Back</button>
+        </div>
+
+        <!-- Dynamic Sale Banner from discounts table -->
+        <div class="sale-banner">
+          <div>
+            <div class="sale-title">🎉 <span id="sale-name">Diwali Dhamaka Sale</span> <span class="badge-discount" id="sale-badge">-15% OFF</span></div>
+            <div class="sale-date">Valid from Nov 15 – Nov 25, 2026</div>
+          </div>
+          <span style="font-size:10px; font-weight:700; color:#B45309; background:white; padding:3px 8px; border-radius:99px;">Live Sale</span>
+        </div>
+
+        <!-- Period tabs -->
+        <div class="period-tabs">
+          <button class="period-tab" onclick="setPeriod(this, 'weekly')">Weekly</button>
+          <button class="period-tab active" onclick="setPeriod(this, 'monthly')">Monthly</button>
+          <button class="period-tab" onclick="setPeriod(this, 'quarterly')">Quarterly</button>
+          <button class="period-tab" onclick="setPeriod(this, 'yearly')">Yearly <span class="badge-discount">-20%</span></button>
+        </div>
+
+        <!-- Modules Container -->
+        <div id="modules-container"></div>
+
+        <div class="floating-bar">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <span style="font-size:11px; color:var(--text-muted);">Calculated Total:</span>
+              <div style="font-size:18px; font-weight:800; color:#0F172A;" id="sub-total">₹0</div>
+            </div>
+            <span style="font-size:11px; font-weight:700; color:#10B981; background:#ECFDF5; padding:4px 10px; border-radius:99px;" id="selected-badge">0 Modules Selected</span>
+          </div>
+          <button class="pill-btn accent" onclick="submitRequest()">Submit Subscription Request</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phone 6: Admin Portal with DocSpot Floating Dock -->
+    <div class="phone" id="view-admin" style="display:none; position:relative;">
+      <div class="status-bar">
+        <span>9:41</span>
+        <div class="dynamic-island"></div>
+        <span>100%</span>
+      </div>
+      <div class="screen-content" style="padding-bottom:90px;">
+        
+        <!-- Tab 1: Admin Dashboard (Pending Requests List) -->
+        <div id="admin-tab-dashboard" class="tab-pane-animated">
+          <div class="screen-header" style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <h2 class="screen-title">Admin Dashboard</h2>
+                <span style="font-size:11px; font-weight:800; background:#DC2626; color:white; padding:3px 8px; border-radius:99px; white-space:nowrap;">1 New</span>
+              </div>
+              <p class="screen-subtitle">Pending subscription approvals</p>
+            </div>
+            <button class="period-tab" onclick="switchView('login')" style="flex:none; padding:6px 12px; background:#F1F5F9; font-size:11px; font-weight:700;">Sign Out</button>
+          </div>
+
+          <!-- Quick Summary Metrics (FIXED AT THE TOP) -->
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:14px;">
+            <div class="doc-card" style="padding:12px 14px; text-align:center; margin-bottom:0; background:linear-gradient(180deg, #FFFFFF, #F8FAFC); border:1px solid #E2E8F0;">
+              <div style="font-size:22px; font-weight:800; color:#0F172A; line-height:1.1;">1</div>
+              <div style="font-size:11px; color:var(--text-muted); font-weight:700; margin-top:2px;">Pending Review</div>
+            </div>
+            <div class="doc-card" style="padding:12px 14px; text-align:center; margin-bottom:0; background:linear-gradient(180deg, #FFFFFF, #F8FAFC); border:1px solid #E2E8F0;">
+              <div style="font-size:22px; font-weight:800; color:#10B981; line-height:1.1;">₹1,699</div>
+              <div style="font-size:11px; color:var(--text-muted); font-weight:700; margin-top:2px;">Pending Volume</div>
+            </div>
+          </div>
+
+          <!-- Section Label -->
+          <div style="font-size:12px; font-weight:700; color:#64748B; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Pending Approval Queue</div>
+
+          <!-- Compact Collapsible Pending Request Card (Below Metrics) -->
+          <div class="doc-card" style="border-left:4px solid #F59E0B; padding:14px 16px;">
+            <!-- Compact Header (Always Visible) -->
+            <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleRequestCard('req-details-1', 'req-arrow-1')">
+              <div style="flex:1;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+                  <span style="font-size:11px; font-weight:800; color:#64748B; background:#F1F5F9; padding:2px 7px; border-radius:6px; letter-spacing:0.5px;">#REQ-1082</span>
+                  <div style="font-size:15px; font-weight:800; color:#0F172A;">Nikhil Kamble</div>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted);">Requested: Nov 18, 2026 &bull; 20:45</div>
+              </div>
+              
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:11px; font-weight:700; color:#D97706; background:#FEF3C7; padding:3px 10px; border-radius:99px; white-space:nowrap;">Pending</span>
+                <span id="req-arrow-1" style="font-size:14px; color:#64748B; font-weight:800; transition:transform 0.25s ease; display:inline-block;">▼</span>
+              </div>
+            </div>
+
+            <!-- Expandable Details Section (Collapsed by Default) -->
+            <div id="req-details-1" style="display:none; margin-top:14px; border-top:1px dashed #E2E8F0; padding-top:12px;">
+              <div style="background:#F8FAFC; border-radius:12px; padding:10px 12px; margin-bottom:12px; border:1px solid #F1F5F9;">
+                <div style="font-size:12px; color:#475569; margin-bottom:4px;">📞 <strong>+91 98234 11223</strong> (India &bull; INR)</div>
+                <div style="font-size:12px; color:#475569; margin-bottom:4px;">📦 Module: <strong>Grapion Gym</strong> (Monthly Plan)</div>
+                <div style="font-size:13px; font-weight:800; color:#0F172A;">Total Amount: <span style="color:#059669;">₹1,699</span> <span style="font-size:10px; color:#DC2626; background:#FEF2F2; padding:2px 6px; border-radius:99px;">Diwali 15% Off</span></div>
+              </div>
+              
+              <div style="display:flex; gap:8px;">
+                <button class="pill-btn accent" style="padding:10px; font-size:12px; font-weight:800;" onclick="openApprovalSheet()">
+                  Approve
+                </button>
+                <button class="pill-btn secondary" style="padding:10px; font-size:12px; color:#DC2626; font-weight:700;" onclick="prompt('Enter rejection reason:'); alert('Request Rejected');">
+                  Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Modules Section (Admin All-Access Suite) -->
+        <div id="admin-tab-modules" class="tab-pane-animated" style="display:none;">
+          <div class="screen-header" style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <h2 class="screen-title">All Modules</h2>
+                <span style="font-size:10px; font-weight:800; background:#10B981; color:white; padding:3px 8px; border-radius:99px;">Admin Access</span>
+              </div>
+              <p class="screen-subtitle">Direct access to all backend business verticals</p>
+            </div>
+            <button class="period-tab" onclick="switchView('login')" style="flex:none; padding:6px 12px; background:#F1F5F9; font-size:11px; font-weight:700;">Sign Out</button>
+          </div>
+
+          <!-- Admin Privilege Banner -->
+          <div style="background:linear-gradient(135deg, #0F172A, #1E293B); border-radius:16px; padding:12px 14px; color:white; margin-bottom:14px; display:flex; align-items:center; gap:10px;">
+            <div style="font-size:20px;">🛡️</div>
+            <div style="font-size:11px; line-height:1.4;">
+              <strong>Admin Bypass Active:</strong> Unconditional preview access enabled for all modules currently in engineering.
+            </div>
+          </div>
+
+          <!-- Module 1: Gym (In Development) -->
+          <div class="doc-card" style="padding:14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="showDevModal('Grapion Gym')">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="font-size:26px;">🏋️</div>
+              <div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <strong style="font-size:14px; color:#0F172A;">Grapion Gym</strong>
+                  <span style="font-size:10px; font-weight:700; background:#FFFBEB; color:#D97706; padding:2px 6px; border-radius:99px;">🚧 In Development</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted);">Members, attendance, trainers & POS</div>
+              </div>
+            </div>
+            <span style="font-size:11px; font-weight:700; color:#D97706; background:#FEF3C7; padding:4px 8px; border-radius:8px;">Preview</span>
+          </div>
+
+          <!-- Module 2: Wedding (In Development) -->
+          <div class="doc-card" style="padding:14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="showDevModal('Grapion Wedding')">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="font-size:26px;">💍</div>
+              <div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <strong style="font-size:14px; color:#0F172A;">Grapion Wedding</strong>
+                  <span style="font-size:10px; font-weight:700; background:#FFFBEB; color:#D97706; padding:2px 6px; border-radius:99px;">🚧 In Development</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted);">Event planning, vendors & guest RSVPs</div>
+              </div>
+            </div>
+            <span style="font-size:11px; font-weight:700; color:#D97706; background:#FEF3C7; padding:4px 8px; border-radius:8px;">Preview</span>
+          </div>
+
+          <!-- Module 3: Medical (In Development) -->
+          <div class="doc-card" style="padding:14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="showDevModal('Grapion Medical')">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="font-size:26px;">🩺</div>
+              <div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <strong style="font-size:14px; color:#0F172A;">Grapion Medical</strong>
+                  <span style="font-size:10px; font-weight:700; background:#FFFBEB; color:#D97706; padding:2px 6px; border-radius:99px;">🚧 In Development</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted);">Patients, doctor slots & prescriptions</div>
+              </div>
+            </div>
+            <span style="font-size:11px; font-weight:700; color:#D97706; background:#FEF3C7; padding:4px 8px; border-radius:8px;">Preview</span>
+          </div>
+
+          <!-- Module 4: Academy (In Development) -->
+          <div class="doc-card" style="padding:14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="showDevModal('Grapion Academy')">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <div style="font-size:26px;">🎓</div>
+              <div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <strong style="font-size:14px; color:#0F172A;">Grapion Academy</strong>
+                  <span style="font-size:10px; font-weight:700; background:#FFFBEB; color:#D97706; padding:2px 6px; border-radius:99px;">🚧 In Development</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted);">Courses, batches, exams & attendance</div>
+              </div>
+            </div>
+            <span style="font-size:11px; font-weight:700; color:#D97706; background:#FEF3C7; padding:4px 8px; border-radius:8px;">Preview</span>
+          </div>
+
+        </div>
+
+        <!-- Approval Sheet Bottom Modal (Opens strictly upon clicking 'Approve Payment') -->
+        <div class="sheet-modal" id="approve-sheet" style="display:none;">
+          <div class="sheet-drag" onclick="closeApprovalSheet()"></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h3 style="font-size:16px; font-weight:800;">Record Verified Payment</h3>
+            <span style="cursor:pointer; font-size:18px; color:#94A3B8; font-weight:700;" onclick="closeApprovalSheet()">&times;</span>
+          </div>
+          <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px;">Select payment method confirmed via back-office</p>
+
+          <div class="period-tabs">
+            <button class="period-tab" onclick="setPayMethod('cash', this)">Cash</button>
+            <button class="period-tab active" onclick="setPayMethod('upi', this)">UPI</button>
+            <button class="period-tab" onclick="setPayMethod('card', this)">Card</button>
+          </div>
+
+          <div id="pay-upi-fields">
+            <div class="input-group">
+              <label class="input-label">Payer UPI ID</label>
+              <input type="text" class="doc-input" placeholder="e.g. nikhil@okaxis" value="nikhil@okhdfc">
+            </div>
+            <div class="input-group">
+              <label class="input-label">Last 4–5 Digits of Ref/UTR</label>
+              <input type="text" class="doc-input" placeholder="e.g. 8492" value="9842">
+            </div>
+          </div>
+
+          <div id="pay-card-fields" style="display:none;">
+            <div class="input-group">
+              <label class="input-label">Cardholder Name</label>
+              <input type="text" class="doc-input" placeholder="Name on card">
+            </div>
+            <div class="input-group">
+              <label class="input-label">Last 4 Digits of Card</label>
+              <input type="text" class="doc-input" placeholder="e.g. 4022" maxlength="4">
+            </div>
+          </div>
+
+          <div id="pay-cash-fields" style="display:none;">
+            <p style="font-size:12px; color:#10B981; font-weight:600; margin-bottom:12px;">&check; Cash received and verified directly in person.</p>
+          </div>
+
+          <button class="pill-btn accent" onclick="alert('Subscription Activated! Modules now accessible.'); closeApprovalSheet();">
+            Confirm & Activate Modules
+          </button>
+        </div>
+
+      </div>
+
+      
+      <!-- In-Development Interactive Screen Modal -->
+      <div class="dev-modal-overlay" id="dev-modal" onclick="closeDevModal(event)">
+        <div class="dev-modal-card" onclick="event.stopPropagation()">
+          <div style="width:54px; height:54px; background:#FEF3C7; border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 14px auto; font-size:26px;">
+            🚧
+          </div>
+          <h3 id="dev-modal-title" style="font-size:18px; font-weight:800; color:#0F172A; margin-bottom:6px;">Module in Development</h3>
+          <p style="font-size:13px; color:#64748B; line-height:1.5; margin-bottom:20px;">
+            This module is currently being developed and is in active engineering.<br>
+            <strong style="color:#0F172A;">Contact administrator for further details.</strong>
+          </p>
+          <button class="pill-btn accent" onclick="closeDevModal()" style="padding:12px; font-weight:700; font-size:13px;">
+            Understood
+          </button>
+        </div>
+      </div>
+
+      <!-- DOCSPOT FLOATING BLACK PILL BOTTOM DOCK -->
+      <div class="admin-dock-container">
+        <button class="admin-dock-item active" id="dock-btn-dashboard" onclick="switchAdminTab('dashboard')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+          <span>Home</span>
+        </button>
+
+        <button class="admin-dock-item" id="dock-btn-modules" onclick="switchAdminTab('modules')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Modules</span>
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    
+    // EXTENSIVE WORLD COUNTRIES DATABASE WITH HIGH-RES FLAGS, DIALING CODES & CURRENCY
+    const ALL_COUNTRIES = [
+      { code: "IN", name: "India", dial: "+91", curr: "INR", sym: "₹", flag: "in", rate: 1.0 },
+      { code: "US", name: "United States", dial: "+1", curr: "USD", sym: "$", flag: "us", rate: 0.012 },
+      { code: "GB", name: "United Kingdom", dial: "+44", curr: "GBP", sym: "£", flag: "gb", rate: 0.0095 },
+      { code: "CA", name: "Canada", dial: "+1", curr: "CAD", sym: "CA$", flag: "ca", rate: 0.016 },
+      { code: "AU", name: "Australia", dial: "+61", curr: "AUD", sym: "AU$", flag: "au", rate: 0.018 },
+      { code: "AE", name: "United Arab Emirates", dial: "+971", curr: "AED", sym: "AED ", flag: "ae", rate: 0.044 },
+      { code: "SA", name: "Saudi Arabia", dial: "+966", curr: "SAR", sym: "SAR ", flag: "sa", rate: 0.045 },
+      { code: "DE", name: "Germany", dial: "+49", curr: "EUR", sym: "€", flag: "de", rate: 0.011 },
+      { code: "FR", name: "France", dial: "+33", curr: "EUR", sym: "€", flag: "fr", rate: 0.011 },
+      { code: "IT", name: "Italy", dial: "+39", curr: "EUR", sym: "€", flag: "it", rate: 0.011 },
+      { code: "ES", name: "Spain", dial: "+34", curr: "EUR", sym: "€", flag: "es", rate: 0.011 },
+      { code: "NL", name: "Netherlands", dial: "+31", curr: "EUR", sym: "€", flag: "nl", rate: 0.011 },
+      { code: "CH", name: "Switzerland", dial: "+41", curr: "CHF", sym: "CHF ", flag: "ch", rate: 0.011 },
+      { code: "SG", name: "Singapore", dial: "+65", curr: "SGD", sym: "SG$", flag: "sg", rate: 0.016 },
+      { code: "MY", name: "Malaysia", dial: "+60", curr: "MYR", sym: "RM ", flag: "my", rate: 0.054 },
+      { code: "ID", name: "Indonesia", dial: "+62", curr: "IDR", sym: "Rp ", flag: "id", rate: 190.0 },
+      { code: "TH", name: "Thailand", dial: "+66", curr: "THB", sym: "฿", flag: "th", rate: 0.42 },
+      { code: "VN", name: "Vietnam", dial: "+84", curr: "VND", sym: "₫", flag: "vn", rate: 305.0 },
+      { code: "PH", name: "Philippines", dial: "+63", curr: "PHP", sym: "₱", flag: "ph", rate: 0.69 },
+      { code: "JP", name: "Japan", dial: "+81", curr: "JPY", sym: "¥", flag: "jp", rate: 1.85 },
+      { code: "KR", name: "South Korea", dial: "+82", curr: "KRW", sym: "₩", flag: "kr", rate: 16.4 },
+      { code: "CN", name: "China", dial: "+86", curr: "CNY", sym: "¥", flag: "cn", rate: 0.086 },
+      { code: "HK", name: "Hong Kong", dial: "+852", curr: "HKD", sym: "HK$", flag: "hk", rate: 0.093 },
+      { code: "NZ", name: "New Zealand", dial: "+64", curr: "NZD", sym: "NZ$", flag: "nz", rate: 0.02 },
+      { code: "ZA", name: "South Africa", dial: "+27", curr: "ZAR", sym: "R ", flag: "za", rate: 0.22 },
+      { code: "NG", name: "Nigeria", dial: "+234", curr: "NGN", sym: "₦", flag: "ng", rate: 18.2 },
+      { code: "KE", name: "Kenya", dial: "+254", curr: "KES", sym: "KSh ", flag: "ke", rate: 1.55 },
+      { code: "EG", name: "Egypt", dial: "+20", curr: "EGP", sym: "E£", flag: "eg", rate: 0.59 },
+      { code: "BR", name: "Brazil", dial: "+55", curr: "BRL", sym: "R$", flag: "br", rate: 0.068 },
+      { code: "MX", name: "Mexico", dial: "+52", curr: "MXN", sym: "Mex$", flag: "mx", rate: 0.24 },
+      { code: "QA", name: "Qatar", dial: "+974", curr: "QAR", sym: "QR ", flag: "qa", rate: 0.044 },
+      { code: "KW", name: "Kuwait", dial: "+965", curr: "KWD", sym: "KD ", flag: "kw", rate: 0.0037 },
+      { code: "OM", name: "Oman", dial: "+968", curr: "OMR", sym: "OMR ", flag: "om", rate: 0.0046 },
+      { code: "BH", name: "Bahrain", dial: "+973", curr: "BHD", sym: "BD ", flag: "bh", rate: 0.0045 },
+      { code: "TR", name: "Turkey", dial: "+90", curr: "TRY", sym: "₺", flag: "tr", rate: 0.41 },
+      { code: "RU", name: "Russia", dial: "+7", curr: "RUB", sym: "₽", flag: "ru", rate: 1.15 },
+      { code: "SE", name: "Sweden", dial: "+46", curr: "SEK", sym: "kr ", flag: "se", rate: 0.13 },
+      { code: "NO", name: "Norway", dial: "+47", curr: "NOK", sym: "kr ", flag: "no", rate: 0.13 },
+      { code: "DK", name: "Denmark", dial: "+45", curr: "DKK", sym: "kr ", flag: "dk", rate: 0.082 },
+      { code: "PL", name: "Poland", dial: "+48", curr: "PLN", sym: "zł", flag: "pl", rate: 0.048 },
+      { code: "IE", name: "Ireland", dial: "+353", curr: "EUR", sym: "€", flag: "ie", rate: 0.011 },
+      { code: "IL", name: "Israel", dial: "+972", curr: "ILS", sym: "₪", flag: "il", rate: 0.044 },
+      { code: "BD", name: "Bangladesh", dial: "+880", curr: "BDT", sym: "৳", flag: "bd", rate: 1.43 },
+      { code: "PK", name: "Pakistan", dial: "+92", curr: "PKR", sym: "Rs ", flag: "pk", rate: 3.32 },
+      { code: "LK", name: "Sri Lanka", dial: "+94", curr: "LKR", sym: "Rs ", flag: "lk", rate: 3.5 },
+      { code: "NP", name: "Nepal", dial: "+977", curr: "NPR", sym: "Rs ", flag: "np", rate: 1.6 }
+    ];
+
+    let activeCountry = ALL_COUNTRIES[0];
+
+    function renderCountryList(filterText = '') {
+      const scroll = document.getElementById('country-list-scroll');
+      if (!scroll) return;
+      scroll.innerHTML = '';
+      const q = filterText.toLowerCase();
+
+      ALL_COUNTRIES.filter(c => c.name.toLowerCase().includes(q) || c.dial.includes(q) || c.code.toLowerCase().includes(q)).forEach(c => {
+        const row = document.createElement('div');
+        row.className = 'country-item-row';
+        row.onclick = () => selectCountry(c);
+        row.innerHTML = `
+          <div style="display:flex; align-items:center; gap:10px;">
+            <img class="flag-img" src="https://flagcdn.com/w40/${c.flag}.png" alt="${c.code}">
+            <span style="font-size:13px; font-weight:700; color:#0F172A;">${c.name}</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; font-weight:700; color:#10B981; background:#ECFDF5; padding:2px 6px; border-radius:4px;">${c.curr}</span>
+            <span style="font-size:13px; font-weight:700; color:#64748B;">${c.dial}</span>
+          </div>
+        `;
+        scroll.appendChild(row);
+      });
+    }
+
+    function openCountryPicker() {
+      document.getElementById('country-picker-overlay').style.display = 'flex';
+      renderCountryList('');
+    }
+
+    function closeCountryPicker(e) {
+      if (e) e.stopPropagation();
+      document.getElementById('country-picker-overlay').style.display = 'none';
+    }
+
+    function filterCountries(val) {
+      renderCountryList(val);
+    }
+
+    function selectCountry(country) {
+      activeCountry = country;
+      document.getElementById('selected-flag-img').src = `https://flagcdn.com/w40/${country.flag}.png`;
+      document.getElementById('selected-dial-text').innerText = country.dial;
+      document.getElementById('country-currency-hint').innerText = `✓ Selected Currency: ${country.curr} (${country.sym})`;
+      
+      const modeLabel = document.getElementById('currency-mode-label');
+      if (modeLabel) modeLabel.innerText = `Dynamic Currency: ${country.curr} (${country.sym})`;
+
+      closeCountryPicker();
+
+      // Trigger re-render of prices in current currency
+      renderModules();
+    }
+
+    // Override formatCurrency with activeCountry
+    function formatCurrency(amountINR) {
+      const c = activeCountry || ALL_COUNTRIES[0];
+      const converted = Math.round(amountINR * c.rate);
+      return `${c.sym}${converted.toLocaleString()}`;
+    }
+
+    // OLD CONVERTER OVERRIDDEN
+    const CURRENCIES = {
+      IN: { symbol: '₹', code: 'INR', rate: 1.0, prefix: true },
+      US: { symbol: '$', code: 'USD', rate: 0.012, prefix: true },
+      UK: { symbol: '£', code: 'GBP', rate: 0.0095, prefix: true },
+      EU: { symbol: '€', code: 'EUR', rate: 0.011, prefix: true },
+      AE: { symbol: 'AED ', code: 'AED', rate: 0.044, prefix: true }
+    };
+
+    let currentCountry = 'IN';
+
+    function formatCurrency(amountINR) {
+      const curr = CURRENCIES[currentCountry] || CURRENCIES.IN;
+      const converted = Math.round(amountINR * curr.rate);
+      return `${curr.symbol}${converted.toLocaleString()}`;
+    }
+
+    function onCountrySelected(countryCode) {
+      currentCountry = countryCode;
+      const curr = CURRENCIES[countryCode];
+      
+      const hint = document.getElementById('country-currency-hint');
+      if (hint) hint.innerText = `✓ Selected Currency: ${curr.code} (${curr.symbol})`;
+
+      const modeLabel = document.getElementById('currency-mode-label');
+      if (modeLabel) modeLabel.innerText = `Dynamic Currency: ${curr.code} (${curr.symbol})`;
+
+      // Keep both selects synced
+      if (document.getElementById('reg-country')) document.getElementById('reg-country').value = countryCode;
+      if (document.getElementById('store-currency-select')) document.getElementById('store-currency-select').value = countryCode;
+
+      renderModules();
+    }
+
+    // BASE DATABASE DATA (TABLES: modules, module_prices in base INR paise)
+    const DB_MODULES = [
+      { id: 'mod_gym', code: 'GYM', name: 'Grapion Gym', desc: 'Members, batches, checkins & plans', icon: '🏋️', color: '#10B981' },
+      { id: 'mod_wedding', code: 'WEDDING', name: 'Grapion Wedding', desc: 'Venues, catering, decor & events', icon: '💍', color: '#EC4899' },
+      { id: 'mod_medical', code: 'MEDICAL', name: 'Grapion Medical', desc: 'Clinics, appointments & records', icon: '🩺', color: '#3B82F6' },
+      { id: 'mod_academy', code: 'ACADEMY', name: 'Grapion Academy', desc: 'Courses, students & fee tracking', icon: '🎓', color: '#8B5CF6' }
+    ];
+
+    const DB_PRICES = {
+      mod_gym:     { weekly: 599,  monthly: 1999, quarterly: 5499, yearly: 18999 },
+      mod_wedding: { weekly: 799,  monthly: 2499, quarterly: 6999, yearly: 23999 },
+      mod_medical: { weekly: 899,  monthly: 2999, quarterly: 8499, yearly: 28999 },
+      mod_academy: { weekly: 499,  monthly: 1799, quarterly: 4999, yearly: 16999 }
+    };
+
+    const DB_DISCOUNT = {
+      id: 'disc_diwali_2026',
+      title: 'Diwali Dhamaka Sale',
+      start_date: '2026-11-15',
+      end_date: '2026-11-25',
+      weekly_pct: 10,
+      monthly_pct: 15,
+      quarterly_pct: 20,
+      yearly_pct: 25
+    };
+
+    let currentPeriod = 'monthly';
+    let selectedModuleIds = new Set(['mod_gym']);
+    let autoSkipTimer = null;
+
+    // FORGOT PASSWORD 3-STEP LOGIC
+    function startForgotWizard() {
+      switchView('forgot');
+      nextForgotStep(1);
+    }
+
+    function nextForgotStep(step) {
+      document.getElementById('forgot-step-1').style.display = 'none';
+      document.getElementById('forgot-step-2').style.display = 'none';
+      document.getElementById('forgot-step-3').style.display = 'none';
+
+      document.getElementById('bar-step-1').classList.remove('active');
+      document.getElementById('bar-step-2').classList.remove('active');
+      document.getElementById('bar-step-3').classList.remove('active');
+
+      if (step === 1) {
+        document.getElementById('forgot-step-1').style.display = 'block';
+        document.getElementById('bar-step-1').classList.add('active');
+        document.getElementById('forgot-step-label').innerText = 'Step 1 of 3: Username';
+      } else if (step === 2) {
+        const username = document.getElementById('forgot-input-username').value.trim();
+        if (!username) { alert('Please enter your username'); return; }
+        document.getElementById('display-validated-user').innerText = '@' + username;
+        document.getElementById('forgot-step-2').style.display = 'block';
+        document.getElementById('bar-step-1').classList.add('active');
+        document.getElementById('bar-step-2').classList.add('active');
+        document.getElementById('forgot-step-label').innerText = 'Step 2 of 3: Mobile Verification';
+      } else if (step === 3) {
+        const mobile = document.getElementById('forgot-input-mobile').value.trim();
+        if (!mobile) { alert('Please enter your registered mobile number'); return; }
+        document.getElementById('forgot-step-3').style.display = 'block';
+        document.getElementById('bar-step-1').classList.add('active');
+        document.getElementById('bar-step-2').classList.add('active');
+        document.getElementById('bar-step-3').classList.add('active');
+        document.getElementById('forgot-step-label').innerText = 'Step 3 of 3: Set New Password';
+      }
+    }
+
+    function submitPasswordReset() {
+      const p1 = document.getElementById('forgot-new-pwd').value;
+      const p2 = document.getElementById('forgot-repeat-pwd').value;
+      if (!p1 || !p2) { alert('Please enter both password fields.'); return; }
+      if (p1 !== p2) { alert('Passwords do not match. Please verify.'); return; }
+
+      alert('Password updated successfully! Please sign in with your new password.');
+      switchView('login');
+    }
+
+    // AUTO-TRANSITION AFTER ANIMATION PLAYS
+    function startAutoTransition() {
+      if (autoSkipTimer) clearTimeout(autoSkipTimer);
+      autoSkipTimer = setTimeout(() => {
+        executeAutoSkip();
+      }, 4200);
+    }
+
+    function executeAutoSkip() {
+      if (autoSkipTimer) {
+        clearTimeout(autoSkipTimer);
+        autoSkipTimer = null;
+      }
+      const splashLayer = document.getElementById('splash-layer');
+      if (splashLayer) {
+        splashLayer.classList.add('fading-out');
+        setTimeout(() => {
+          switchView('login');
+          splashLayer.classList.remove('fading-out');
+        }, 500);
+      } else {
+        switchView('login');
+      }
+    }
+
+    function replaySplash() {
+      switchView('splash');
+      const bar = document.getElementById('splash-timeline');
+      bar.style.animation = 'none';
+      bar.offsetHeight;
+      bar.style.animation = 'fillTimeline 4.2s cubic-bezier(0.25, 1, 0.5, 1) forwards';
+      startAutoTransition();
+    }
+
+        // Function to toggle simulated DB active sale for demonstration
+    function toggleDatabaseSale() {
+      if (DB_DISCOUNT) {
+        window._savedDiscount = DB_DISCOUNT;
+        DB_DISCOUNT = null;
+      } else {
+        DB_DISCOUNT = window._savedDiscount || {
+          id: 'disc_diwali_2026',
+          title: 'Diwali Dhamaka Sale',
+          start_date: '2026-11-15',
+          end_date: '2026-11-25',
+          weekly_pct: 10,
+          monthly_pct: 15,
+          quarterly_pct: 20,
+          yearly_pct: 25
+        };
+      }
+      renderModules();
+    }
+
+    function renderModules() {
+      const container = document.getElementById('modules-container');
+      container.innerHTML = '';
+
+      // Check if DB promotional sale is active
+      const saleBanner = document.getElementById('promo-sale-banner') || document.querySelector('.sale-banner');
+      const isSaleActive = DB_DISCOUNT && DB_DISCOUNT[currentPeriod + '_pct'] > 0;
+
+      if (saleBanner) {
+        if (DB_DISCOUNT) {
+          saleBanner.style.display = 'flex';
+          const badge = document.getElementById('sale-badge');
+          if (badge) badge.innerText = `-${DB_DISCOUNT[currentPeriod + '_pct']}% OFF`;
+        } else {
+          // NO SALE: Banner is completely hidden!
+          saleBanner.style.display = 'none';
+        }
+      }
+
+      const discountPct = isSaleActive ? DB_DISCOUNT[currentPeriod + '_pct'] : 0;
+
+      DB_MODULES.forEach(mod => {
+        const isSelected = selectedModuleIds.has(mod.id);
+        const originalPriceINR = DB_PRICES[mod.id][currentPeriod];
+        const finalPriceINR = discountPct > 0 ? Math.round(originalPriceINR * (1 - discountPct / 100)) : originalPriceINR;
+
+        const row = document.createElement('div');
+        row.className = `module-item ${isSelected ? 'active' : ''}`;
+        row.onclick = () => toggleModule(mod.id);
+
+        row.innerHTML = `
+          <div class="module-icon" style="color:${mod.color}">${mod.icon}</div>
+          <div class="module-info">
+            <div class="module-name">${mod.name}</div>
+            <div class="module-desc">${mod.desc}</div>
+          </div>
+          <div class="module-pricing">
+            ${discountPct > 0 ? `<div class="module-price-original">${formatCurrency(originalPriceINR)}</div>` : ''}
+            <div class="module-price">${formatCurrency(finalPriceINR)}</div>
+          </div>
+          <div class="checkbox-pill">${isSelected ? '&check;' : ''}</div>
+        `;
+        container.appendChild(row);
+      });
+
+      calculateTotal();
+    }
+
+    function toggleModule(id) {
+      if (selectedModuleIds.has(id)) {
+        selectedModuleIds.delete(id);
+      } else {
+        selectedModuleIds.add(id);
+      }
+      renderModules();
+    }
+
+    function calculateTotal() {
+      const discountPct = DB_DISCOUNT ? DB_DISCOUNT[currentPeriod + '_pct'] : 0;
+      let totalINR = 0;
+      selectedModuleIds.forEach(id => {
+        const orig = DB_PRICES[id][currentPeriod];
+        totalINR += discountPct > 0 ? Math.round(orig * (1 - discountPct / 100)) : orig;
+      });
+
+      document.getElementById('sub-total').innerText = formatCurrency(totalINR);
+      document.getElementById('selected-badge').innerText = `${selectedModuleIds.size} Module${selectedModuleIds.size === 1 ? '' : 's'} Selected`;
+    }
+
+    function setPeriod(btn, period) {
+      document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentPeriod = period;
+      renderModules();
+    }
+
+    function submitRequest() {
+      if (selectedModuleIds.size === 0) {
+        alert('Please select at least 1 module.');
+        return;
+      }
+      switchView('gate');
+    }
+
+    function switchView(view) {
+      document.querySelectorAll('.phone').forEach(p => p.style.display = 'none');
+      document.getElementById('view-' + view).style.display = 'flex';
+      
+      document.querySelectorAll('.nav-pill').forEach(btn => btn.classList.remove('active'));
+      const activeMap = { 'splash':0, 'login':1, 'register':2, 'forgot':3, 'gate':4, 'subscribe':5, 'admin':6 };
+      if (activeMap[view] !== undefined) document.querySelectorAll('.nav-pill')[activeMap[view]].classList.add('active');
+
+      if (view === 'splash') {
+        startAutoTransition();
+      } else if (autoSkipTimer) {
+        clearTimeout(autoSkipTimer);
+        autoSkipTimer = null;
+      }
+    }
+
+    
+    
+    function toggleRequestCard(contentId, arrowId) {
+      const details = document.getElementById(contentId);
+      const arrow = document.getElementById(arrowId);
+      if (details.style.display === 'none' || details.style.display === '') {
+        details.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+      } else {
+        details.style.display = 'none';
+        arrow.style.transform = 'rotate(0deg)';
+      }
+    }
+
+    function switchAdminTab(tab) {
+      const dash = document.getElementById('admin-tab-dashboard');
+      const mods = document.getElementById('admin-tab-modules');
+      const btnDash = document.getElementById('dock-btn-dashboard');
+      const btnMods = document.getElementById('dock-btn-modules');
+      
+      if (tab === 'dashboard') {
+        mods.style.display = 'none';
+        dash.style.display = 'block';
+        dash.classList.remove('tab-pane-animated');
+        void dash.offsetWidth; // Trigger reflow for smooth animation
+        dash.classList.add('tab-pane-animated');
+        btnDash.classList.add('active');
+        btnMods.classList.remove('active');
+      } else {
+        dash.style.display = 'none';
+        mods.style.display = 'block';
+        mods.classList.remove('tab-pane-animated');
+        void mods.offsetWidth; // Trigger reflow for smooth animation
+        mods.classList.add('tab-pane-animated');
+        btnDash.classList.remove('active');
+        btnMods.classList.add('active');
+      }
+    }
+
+    function showDevModal(moduleName) {
+      document.getElementById('dev-modal-title').textContent = moduleName + ' (In Development)';
+      const modal = document.getElementById('dev-modal');
+      modal.style.display = 'flex';
+    }
+
+    function closeDevModal() {
+      document.getElementById('dev-modal').style.display = 'none';
+    }
+
+    function openApprovalSheet() {
+      document.getElementById('approve-sheet').style.display = 'block';
+    }
+
+    function closeApprovalSheet() {
+      document.getElementById('approve-sheet').style.display = 'none';
+    }
+
+    function setPayMethod(mode, btn) {
+      btn.parentElement.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('pay-upi-fields').style.display = mode === 'upi' ? 'block' : 'none';
+      document.getElementById('pay-card-fields').style.display = mode === 'card' ? 'block' : 'none';
+      document.getElementById('pay-cash-fields').style.display = mode === 'cash' ? 'block' : 'none';
+    }
+
+    renderModules();
+    startAutoTransition();
+  </script>
+</body>
+</html>

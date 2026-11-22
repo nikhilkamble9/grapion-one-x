@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+#Removed By Nikhil 22Nov26 11:59 For dev .env files kept in the development repo (removed in the production repo — AR-03): .env
+*.log
+
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+#Added By Nikhil 22Nov26 11:59 For IntelliJ module files and macOS folder files START
+*.iml
+.DS_Store
+#Added By Nikhil 22Nov26 11:59 For IntelliJ module files and macOS folder files END
+
+#Added By Nikhil 22Nov26 11:59 For machine-local AI tool folders and AI notes (never in the repo) START
+.agents/
+.claude/
+docs/history/
+#Added By Nikhil 22Nov26 11:59 For machine-local AI tool folders and AI notes (never in the repo) END
+
+#Added By Nikhil 22Nov26 11:59 For personal credentials file (never in the repo)
+/Creds
+
+# Firebase service-account key - share privately, never in Git
+grapion_one_x_api/firebase-service-account.json
