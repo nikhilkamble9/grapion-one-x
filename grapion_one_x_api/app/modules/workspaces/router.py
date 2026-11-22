@@ -21,6 +21,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.modules.workspaces.access import (
+    ADMIN_ROLES,  #Added By Nikhil 22Nov26 14:41 For admin demo businesses
     audit,
     load_access,
     mask_mobile,
@@ -109,6 +110,26 @@ async def my_entries(user: User = Depends(get_current_user), db: AsyncSession = 
     return {"entries": entries, "invites": invites, "must_change_password": bool(user.must_change_password)}
 
 
+#Added By Nikhil 22Nov26 14:41 For admin "View as Owner / Member": the admin's own demo business START
+@router.get("/demo")
+async def my_demo(module_code: str = Query(..., max_length=50), user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Admins only. The admin's own business for this module (an entry like /my-entries), or needs_setup."""
+    if user.role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    module = (await db.execute(select(Module).where(Module.code == module_code))).scalar_one_or_none()
+    if not module:
+        raise HTTPException(status_code=404, detail="Module not found")
+    ws = (await db.execute(select(ModuleWorkspace).where(
+        ModuleWorkspace.module_id == module.id, ModuleWorkspace.owner_user_id == user.id))).scalar_one_or_none()
+    return {
+        "module_code": module.code, "module_name": module.name, "icon": module.icon,
+        "workspace_id": str(ws.id) if ws else None, "workspace_name": ws.name if ws else None,
+        "role_code": "owner", "role_name": "Owner", "branch_id": None, "branch_name": None,
+        "needs_setup": ws is None, "active": True,
+    }
+#Added By Nikhil 22Nov26 14:41 For admin "View as Owner / Member": the admin's own demo business END
+
+
 # ---------------- business setup (owner, first time) ----------------
 
 class SetupRequest(BaseModel):
@@ -137,7 +158,8 @@ async def create_workspace(req: SetupRequest, user: User = Depends(get_current_u
         UserModuleSubscription.is_active == True,
         UserModuleSubscription.expires_at >= now,
     ))).first()
-    if not sub:
+    #Modified By Nikhil 22Nov26 14:41 For admins creating their own demo business without a subscription. Old: if not sub:
+    if not sub and user.role not in ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="An active subscription to this module is required")
     if (await db.execute(select(ModuleWorkspace.id).where(
         ModuleWorkspace.module_id == module.id, ModuleWorkspace.owner_user_id == user.id

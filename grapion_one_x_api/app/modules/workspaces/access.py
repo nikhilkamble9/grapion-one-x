@@ -60,7 +60,20 @@ class Access:
         return {b for b, p in self.permissions.items() if b is not None and perm in p}
 
 
+ADMIN_ROLES = ("super_admin", "admin")  #Added By Nikhil 22Nov26 14:41 For admin demo businesses
+
+
+#Added By Nikhil 22Nov26 14:41 For admin demo businesses (admins try modules without buying them) START
+async def owner_is_admin(db: AsyncSession, workspace: ModuleWorkspace) -> bool:
+    """A business owned by an admin / super admin is that admin's own demo. Real customer businesses never match."""
+    role = (await db.execute(select(User.role).where(User.id == workspace.owner_user_id))).scalar_one_or_none()
+    return role in ADMIN_ROLES
+#Added By Nikhil 22Nov26 14:41 For admin demo businesses (admins try modules without buying them) END
+
+
 async def owner_subscription_active(db: AsyncSession, workspace: ModuleWorkspace) -> bool:
+    if await owner_is_admin(db, workspace):  #Added By Nikhil 22Nov26 14:41 For admin demo businesses: no subscription needed
+        return True  #Added By Nikhil 22Nov26 14:41 For admin demo businesses: no subscription needed
     res = await db.execute(
         select(UserModuleSubscription.id).where(
             UserModuleSubscription.user_id == workspace.owner_user_id,

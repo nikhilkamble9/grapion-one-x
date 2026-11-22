@@ -237,15 +237,17 @@ class _InvitesScreenState extends State<InvitesScreen> {
 // ---------------- first-time business setup (owner) ----------------
 
 class BusinessSetupScreen extends StatefulWidget {
-  const BusinessSetupScreen({super.key, required this.entry});
+  const BusinessSetupScreen({super.key, required this.entry, this.onCreated, this.initialName}); //Modified By Nikhil 22Nov26 14:41 For admin demo setup. Old: ({super.key, required this.entry})
   final Map<String, dynamic> entry;
+  final VoidCallback? onCreated; //Added By Nikhil 22Nov26 14:41 For admin demo setup: return to the chooser instead of login routing
+  final String? initialName; //Added By Nikhil 22Nov26 14:41 For admin demo setup: prefilled "Demo Gym"
 
   @override
   State<BusinessSetupScreen> createState() => _BusinessSetupScreenState();
 }
 
 class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
-  final _nameCtrl = TextEditingController();
+  late final _nameCtrl = TextEditingController(text: widget.initialName); //Modified By Nikhil 22Nov26 14:41 For prefilled demo name. Old: final _nameCtrl = TextEditingController();
   final _branchCtrl = TextEditingController(text: 'Main Branch');
   final _addressCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -279,7 +281,12 @@ class _BusinessSetupScreenState extends State<BusinessSetupScreen> {
       });
       if (!mounted) return;
       if (res.statusCode == 201) {
-        await routeAfterLogin(context);
+        //Modified By Nikhil 22Nov26 14:41 For admin demo setup returning to the chooser. Old: await routeAfterLogin(context);
+        if (widget.onCreated != null) {
+          widget.onCreated!();
+        } else {
+          await routeAfterLogin(context);
+        }
       } else {
         setState(() => _error = apiDetail(res.body, 'Could not set up your business'));
       }

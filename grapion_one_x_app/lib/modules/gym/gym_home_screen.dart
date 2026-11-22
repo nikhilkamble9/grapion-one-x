@@ -7,6 +7,7 @@ import '../../screens/profile/profile_screen.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/announcement_banner.dart';
 import '../../widgets/doc_ui.dart';
+import 'gym_attendance.dart'; //Added By Nikhil 22Nov26 14:41 For staff check-in card + Staff Attendance
 import 'gym_common.dart';
 import 'gym_members.dart';
 import 'gym_setup_screens.dart';
@@ -76,6 +77,10 @@ class _GymHomeScreenState extends State<GymHomeScreen> {
               else if (ctx == null && !_failed) gymLoading
               else if (ctx == null) gymEmpty('Could not load your gym. Pull down to try again.')
               else ...[
+                //Added By Nikhil 22Nov26 14:41 For staff: today's shift with Check In / Check Out START
+                if (const {'manager', 'receptionist', 'trainer'}.contains(_role))
+                  MyShiftCard(workspaceId: widget.entry['workspace_id'] as String, onChanged: _load),
+                //Added By Nikhil 22Nov26 14:41 For staff: today's shift with Check In / Check Out END
                 BranchChips(ctx: ctx, selected: _branch, onChanged: (b) => setState(() => _branch = b)),
                 const SizedBox(height: 12),
                 ..._holidayToday(),
@@ -155,6 +160,8 @@ class _GymHomeScreenState extends State<GymHomeScreen> {
       ('${n('visits_today')}', 'Visits today', AppTheme.textPrimary, null),
       if (_ctx!.can('payments.record')) ('${n('pending_payments')}', 'Payments to verify', AppTheme.warningOrange,
           () => _open(PaymentsScreen(ctx: _ctx!, branch: _branch, status: 'pending'))),
+      if (_ctx!.can('attendance.view')) ('${n('staff_present_today')}', 'Staff in today (of ${n('staff_scheduled_today')})', AppTheme.primaryDark, //Added By Nikhil 22Nov26 14:41 For staff present tile
+          () => _open(StaffAttendanceScreen(ctx: _ctx!, branch: _branch))), //Added By Nikhil 22Nov26 14:41 For staff present tile
     ];
     final revenue = s['month_revenue_paise'];
     return Column(
@@ -233,6 +240,7 @@ class _GymHomeScreenState extends State<GymHomeScreen> {
       //Modified By Nikhil 22Nov26 10:47 For Staff and Shifts as two options. Old: ('🧑‍🤝‍🧑', 'Staff & Shifts', 'Roles, shifts, pay', StaffScreen(ctx: ctx, branch: _branch))
       if (ctx.can('staff.manage')) ('🧑‍🤝‍🧑', 'Staff', 'Managers, receptionists, trainers, pay', StaffScreen(ctx: ctx, branch: _branch)),
       if (ctx.can('staff.manage')) ('🕘', 'Shifts', 'Staff working hours', StaffScreen(ctx: ctx, branch: _branch, view: 'shifts')), //Added By Nikhil 22Nov26 10:47 For Shifts as its own option
+      if (ctx.can('attendance.view')) ('🕒', 'Staff Attendance', 'Who came in, late, absent • month totals', StaffAttendanceScreen(ctx: ctx, branch: _branch)), //Added By Nikhil 22Nov26 14:41 For Staff Attendance option
       ('🏖️', 'Holidays & Timings', ctx.can('holidays.edit') ? 'Notifies members & staff' : 'Opening hours & holidays', HolidaysScreen(ctx: ctx, branch: _branch)),
       if (ctx.isOwner || ctx.can('business.manage')) ('📍', 'Branches & Settings', 'Attendance rules, reminders, UPI', BranchesScreen(ctx: ctx)),
       ('🧖', 'Services', 'Spa, diet plans, PT packages', null),

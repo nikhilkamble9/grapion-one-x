@@ -198,16 +198,28 @@ async def overview(workspace_id: str, user: User = Depends(get_current_user), db
                        AND p.paid_on >= :ms) AS month_revenue_paise,
                    (SELECT count(*) FROM {S}workspace_members wm JOIN {S}module_roles r ON r.id = wm.role_id
                      WHERE wm.branch_id = b.id AND wm.status = 'active' AND r.is_staff) AS staff,
-                   (SELECT h.reason FROM {S}gym_holidays h WHERE h.branch_id = b.id AND h.is_active AND h.holiday_date = :today LIMIT 1) AS holiday_today
+                   (SELECT h.reason FROM {S}gym_holidays h WHERE h.branch_id = b.id AND h.is_active AND h.holiday_date = :today LIMIT 1) AS holiday_today,
+                   --Added By Nikhil 22Nov26 14:41 For staff present / scheduled today START
+                   (SELECT count(*) FROM {S}gym_shift_assignments sa JOIN {S}gym_shifts sh ON sh.id = sa.shift_id
+                      JOIN {S}workspace_members wm ON wm.id = sa.workspace_member_id AND wm.status = 'active'
+                     WHERE sh.branch_id = b.id AND sh.status = 'active' AND CAST(:wd AS smallint) = ANY(sh.weekdays)
+                       AND sa.effective_from <= :today AND (sa.effective_to IS NULL OR sa.effective_to >= :today)
+                       AND NOT EXISTS (SELECT 1 FROM {S}gym_holidays h2 WHERE h2.branch_id = b.id AND h2.is_active AND h2.holiday_date = :today)
+                   ) AS staff_scheduled_today,
+                   (SELECT count(*) FROM {S}gym_staff_attendance sa2 WHERE sa2.branch_id = b.id AND sa2.work_date = :today
+                       AND sa2.check_in_at IS NOT NULL) AS staff_present_today
+                   --Added By Nikhil 22Nov26 14:41 For staff present / scheduled today END
               FROM {S}workspace_branches b LEFT JOIN {S}gym_branch_settings s ON s.branch_id = b.id
-             WHERE b.id = ANY(:b)"""), {"b": ids, "today": today, "ds": start, "de": end, "ms": month_start})).mappings().all()
+             WHERE b.id = ANY(:b)"""), {"b": ids, "today": today, "ds": start, "de": end, "ms": month_start, "wd": today.isoweekday()})).mappings().all()  #Modified By Nikhil 22Nov26 14:41 For today's weekday (staff scheduled). Old: ..."ms": month_start})
         can_money = {bid for bid in ids if acc.can("gym.reports.view", bid) or acc.can("gym.payments.verify", bid)}
         for r in rows:
             d = {k: (int(v) if isinstance(v, int) else v) for k, v in r.items() if k != "id"}
             if r["id"] not in can_money:
                 d["month_revenue_paise"] = None  # receptionists / trainers do not see revenue
             stats[r["id"]] = d
-    keys = ("members", "active", "expiring", "expired", "visits_today", "inside_now", "pending_payments", "staff")
+    #Modified By Nikhil 22Nov26 14:41 For staff present / scheduled totals. Old: keys = (..., "pending_payments", "staff")
+    keys = ("members", "active", "expiring", "expired", "visits_today", "inside_now", "pending_payments", "staff",
+            "staff_scheduled_today", "staff_present_today")
     totals = {k: sum((s[k] or 0) for s in stats.values()) for k in keys}
     money = [s["month_revenue_paise"] for s in stats.values() if s["month_revenue_paise"] is not None]
     totals["month_revenue_paise"] = sum(money) if money else None
@@ -1254,3 +1266,323 @@ async def verify_payment(workspace_id: str, payment_id: str, action: str, user: 
     audit(db, user, f"payment.{new}", "gym_payments", xid, acc.workspace.id)
     await db.commit()
     return {"status": new}
+
+
+# ======================= staff attendance (step 4) =======================
+#Added By Nikhil 22Nov26 14:41 For staff self check-in + shift attendance (register, month summary, corrections) START
+
+CHECKIN_EARLY_MIN = 60  # check-in opens 60 min before the shift starts (decided 22Nov26)
+_STATUS_LABEL = {"present": "Present", "late": "Late", "half_day": "Half day", "absent": "Absent", "missed_checkout": "Missed check-out",
+                 "holiday": "Holiday", "week_off": "Week off", "pending": "Not checked in"}
+
+
+def _att_status(d: date, now: datetime, start: time, end: time, cfg: dict, rec: dict | None,
+                holiday: str | None, works_today: bool) -> tuple[str, bool]:
+    """(status, working_now) — the ONE rule used by check-in, check-out and every read. Server clock (IST) only.
+
+    Check-in: ≤ start + late grace → present; ≤ start + half-day-after → late; later → half_day.
+    Check-out: worked < 50 % of the shift → absent; left more than the early-out grace before the end → half_day.
+    No check-out by the end of the day → missed_checkout. No check-in by the shift end → absent.
+    Branch holiday → holiday; not one of the shift's weekdays → week_off (never absent).
+    'pending' = shift not over yet and not checked in (not counted). A correction always wins.
+    """
+    tz = now.tzinfo
+    if rec and rec.get("corrected_by"):
+        return rec["status"], False
+    s_dt, e_dt = datetime.combine(d, start, tz), datetime.combine(d, end, tz)
+    cin = rec.get("check_in_at") if rec else None
+    if not cin:
+        if not works_today:
+            return "week_off", False
+        if holiday:
+            return "holiday", False
+        return ("absent", False) if now >= e_dt else ("pending", False)
+    cin = cin.astimezone(tz)
+    late_min = (cin - s_dt).total_seconds() / 60
+    st = "present" if late_min <= cfg["late"] else "late" if late_min <= cfg["half"] else "half_day"
+    cout = rec.get("check_out_at")
+    if not cout:
+        return ("missed_checkout", False) if d < now.date() else (st, True)
+    cout = cout.astimezone(tz)
+    if (cout - max(cin, s_dt)).total_seconds() < (e_dt - s_dt).total_seconds() * 0.5:
+        return "absent", False
+    if cout < e_dt - timedelta(minutes=cfg["early"]):
+        return "half_day", False
+    return st, False
+
+
+async def _att_rows(db: AsyncSession, branch_ids: list[UUID], d1: date, d2: date, member_id: UUID | None = None) -> list:
+    """One row per (day, active staff member, assigned shift) with the attendance record if any."""
+    return (await db.execute(text(f"""
+        SELECT CAST(g.d AS date) AS work_date, wm.id AS member_id, wm.branch_id, b.name AS branch_name, wm.user_id,
+               u.first_name, u.last_name, r.code AS role_code, r.name AS role_name, r.rank,
+               s.id AS shift_id, s.name AS shift_name, s.start_time, s.end_time, s.weekdays,
+               a.id AS att_id, a.check_in_at, a.check_out_at, a.status, a.corrected_by, a.correction_note,
+               COALESCE(bs.late_grace_minutes, 15) AS late, COALESCE(bs.half_day_after_minutes, 30) AS half,
+               COALESCE(bs.early_out_grace_minutes, 10) AS early,
+               (SELECT h.reason FROM {S}gym_holidays h WHERE h.branch_id = wm.branch_id AND h.is_active
+                   AND h.holiday_date = CAST(g.d AS date) LIMIT 1) AS holiday
+          FROM generate_series(CAST(:d1 AS date), CAST(:d2 AS date), interval '1 day') AS g(d)
+          JOIN {S}gym_shift_assignments sa ON sa.effective_from <= CAST(g.d AS date)
+                AND (sa.effective_to IS NULL OR sa.effective_to >= CAST(g.d AS date))
+          JOIN {S}gym_shifts s ON s.id = sa.shift_id
+          JOIN {S}workspace_members wm ON wm.id = sa.workspace_member_id AND wm.status = 'active'
+          JOIN {S}module_roles r ON r.id = wm.role_id AND r.is_staff
+          JOIN {S}users u ON u.id = wm.user_id
+          JOIN {S}workspace_branches b ON b.id = wm.branch_id
+          LEFT JOIN {S}gym_branch_settings bs ON bs.branch_id = wm.branch_id
+          LEFT JOIN {S}gym_staff_attendance a ON a.workspace_member_id = wm.id AND a.shift_id = s.id AND a.work_date = CAST(g.d AS date)
+         WHERE wm.branch_id = ANY(:b) AND (CAST(:m AS uuid) IS NULL OR wm.id = CAST(:m AS uuid))
+           AND (s.status = 'active' OR a.id IS NOT NULL)
+         ORDER BY g.d DESC, s.start_time, r.rank, u.first_name"""),
+        {"b": branch_ids, "d1": d1, "d2": d2, "m": str(member_id) if member_id else None})).mappings().all()
+
+
+def _cfg(r) -> dict:
+    return {"late": r["late"], "half": r["half"], "early": r["early"]}
+
+
+def _att_out(r, now: datetime) -> dict:
+    d = r["work_date"]
+    works = d.isoweekday() in (r["weekdays"] or [])
+    rec = ({"check_in_at": r["check_in_at"], "check_out_at": r["check_out_at"], "status": r["status"], "corrected_by": r["corrected_by"]}
+           if r["att_id"] else None)
+    status, working = _att_status(d, now, r["start_time"], r["end_time"], _cfg(r), rec, r["holiday"], works)
+    tz = now.tzinfo
+    opens = datetime.combine(d, r["start_time"], tz) - timedelta(minutes=CHECKIN_EARLY_MIN)
+    ends = datetime.combine(d, r["end_time"], tz)
+    can_in = (d == now.date() and works and not r["holiday"] and not (rec and (rec["check_in_at"] or rec["corrected_by"]))
+              and opens <= now < ends)
+    return {
+        "work_date": d.isoformat(), "member_id": str(r["member_id"]), "branch_id": str(r["branch_id"]), "branch_name": r["branch_name"],
+        "name": f"{r['first_name']} {r['last_name']}", "role_code": r["role_code"], "role_name": r["role_name"],
+        "shift_id": str(r["shift_id"]), "shift_name": r["shift_name"], "start_time": _t(r["start_time"]), "end_time": _t(r["end_time"]),
+        "check_in_at": r["check_in_at"].astimezone(tz).isoformat() if r["check_in_at"] else None,
+        "check_out_at": r["check_out_at"].astimezone(tz).isoformat() if r["check_out_at"] else None,
+        "status": status, "status_label": _STATUS_LABEL.get(status, status), "working_now": working,
+        "corrected": bool(r["corrected_by"]), "correction_note": r["correction_note"], "holiday": r["holiday"],
+        "can_check_in": can_in, "can_check_out": working, "check_in_opens": _t(opens.time()),
+    }
+
+
+def _counts(items: list[dict]) -> dict:
+    c = {k: 0 for k in ("present", "late", "half_day", "absent", "missed_checkout", "holiday", "week_off", "pending")}
+    for i in items:
+        c[i["status"]] = c.get(i["status"], 0) + 1
+    c["scheduled"] = sum(c[k] for k in ("present", "late", "half_day", "absent", "missed_checkout"))
+    return c
+
+
+def _month_range(month: str | None) -> tuple[date, date, str]:
+    today = _today()
+    if month:
+        if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+            raise HTTPException(status_code=400, detail="Month must look like 2026-11")
+        first = date(int(month[:4]), int(month[5:]), 1)
+    else:
+        first = today.replace(day=1)
+    last = date(first.year, first.month, calendar.monthrange(first.year, first.month)[1])
+    return first, min(last, today), first.strftime("%Y-%m")
+
+
+async def _my_items(db: AsyncSession, acc: Access, d1: date, d2: date) -> list[tuple]:
+    now = now_tz()
+    out = []
+    for m in (r for r in acc.roles if r.role.is_staff and r.branch_id):
+        out += [(r, _att_out(r, now)) for r in await _att_rows(db, [m.branch_id], d1, d2, m.id)]
+    return out
+
+
+@router.get("/me/today")
+async def my_today(workspace_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The caller's own shifts today (staff roles only) with what they may do now."""
+    acc = await load_access(db, user, workspace_id)
+    today = _today()
+    items = [o for _, o in await _my_items(db, acc, today, today)]
+    items.sort(key=lambda o: o["start_time"])
+    return {"today": today.isoformat(), "now": now_tz().isoformat(), "is_staff": any(r.role.is_staff for r in acc.roles),
+            "checkin_early_minutes": CHECKIN_EARLY_MIN, "shifts": items}
+
+
+class MyCheckRequest(BaseModel):
+    shift_id: str | None = None
+
+
+@router.post("/me/checkin")
+async def my_checkin(workspace_id: str, req: MyCheckRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Own record only, server time. Picks the shift whose check-in window is open now (or the one asked for)."""
+    acc = await load_access(db, user, workspace_id)
+    now, today = now_tz(), _today()
+    items = await _my_items(db, acc, today, today)
+    if not items:
+        raise HTTPException(status_code=400, detail="You have no shift today")
+    if any(o["working_now"] for _, o in items):
+        raise HTTPException(status_code=400, detail="You are already checked in. Check out first.")
+    pool = [(r, o) for r, o in items if not req.shift_id or o["shift_id"] == req.shift_id]
+    open_ = sorted([(r, o) for r, o in pool if o["can_check_in"]], key=lambda x: x[1]["start_time"])
+    if not open_:
+        if any(o["status"] == "holiday" for _, o in pool):
+            raise HTTPException(status_code=400, detail="Today is a holiday at your branch. No check-in needed.")
+        if all(o["status"] == "week_off" for _, o in pool):
+            raise HTTPException(status_code=400, detail="Today is your week off.")
+        later = sorted(o["check_in_opens"] for _, o in pool if o["status"] == "pending" and o["check_in_opens"] > now.strftime("%H:%M"))
+        if later:
+            raise HTTPException(status_code=400, detail=f"Check-in opens at {later[0]} ({CHECKIN_EARLY_MIN} min before your shift)")
+        raise HTTPException(status_code=400, detail="Your shift for today is over or already marked")
+    r, o = open_[0]
+    status, _ = _att_status(today, now, r["start_time"], r["end_time"], _cfg(r),
+                            {"check_in_at": now, "check_out_at": None, "status": None, "corrected_by": None}, None, True)
+    new_id = (await db.execute(text(
+        f"INSERT INTO {S}gym_staff_attendance (branch_id, workspace_member_id, shift_id, work_date, check_in_at, status) "
+        "VALUES (:b, :m, :s, :d, :now, :st) ON CONFLICT (workspace_member_id, shift_id, work_date) DO UPDATE "
+        f"SET check_in_at = EXCLUDED.check_in_at, status = EXCLUDED.status, updated_at = now() "
+        f"WHERE {S}gym_staff_attendance.check_in_at IS NULL AND {S}gym_staff_attendance.corrected_by IS NULL RETURNING id"),
+        {"b": r["branch_id"], "m": r["member_id"], "s": r["shift_id"], "d": today, "now": now, "st": status})).scalar_one_or_none()
+    if not new_id:
+        raise HTTPException(status_code=400, detail="You are already checked in for this shift")
+    audit(db, user, "staff_attendance.check_in", "gym_staff_attendance", new_id, acc.workspace.id, {"shift": o["shift_name"], "status": status})
+    await db.commit()
+    return {"status": status, "status_label": _STATUS_LABEL[status], "shift_name": o["shift_name"], "check_in_at": now.isoformat()}
+
+
+@router.post("/me/checkout")
+async def my_checkout(workspace_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    acc = await load_access(db, user, workspace_id)
+    now, today = now_tz(), _today()
+    working = [(r, o) for r, o in await _my_items(db, acc, today, today) if o["working_now"]]
+    if not working:
+        raise HTTPException(status_code=400, detail="You are not checked in")
+    r, o = working[0]
+    status, _ = _att_status(today, now, r["start_time"], r["end_time"], _cfg(r),
+                            {"check_in_at": r["check_in_at"], "check_out_at": now, "status": None, "corrected_by": None}, None, True)
+    done = (await db.execute(text(
+        f"UPDATE {S}gym_staff_attendance SET check_out_at = :now, status = :st, updated_at = now() "
+        "WHERE id = :a AND check_out_at IS NULL AND corrected_by IS NULL RETURNING id"),
+        {"now": now, "st": status, "a": r["att_id"]})).scalar_one_or_none()
+    if not done:
+        raise HTTPException(status_code=400, detail="You are not checked in")
+    audit(db, user, "staff_attendance.check_out", "gym_staff_attendance", r["att_id"], acc.workspace.id, {"shift": o["shift_name"], "status": status})
+    await db.commit()
+    return {"status": status, "status_label": _STATUS_LABEL[status], "shift_name": o["shift_name"], "check_out_at": now.isoformat()}
+
+
+@router.get("/me/attendance")
+async def my_attendance(workspace_id: str, month: str | None = None, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    acc = await load_access(db, user, workspace_id)
+    d1, d2, label = _month_range(month)
+    items = [o for _, o in await _my_items(db, acc, d1, d2)] if d1 <= d2 else []
+    return {"month": label, "days": items, "counts": _counts(items)}
+
+
+def _can_correct(acc: Access, r, me: User) -> bool:
+    return (acc.can("gym.staff_attendance.correct", r["branch_id"]) and r["user_id"] != me.id
+            and (acc.is_owner or r["rank"] > acc.best_role.rank))
+
+
+@router.get("/staff-attendance")
+async def staff_register(workspace_id: str, date_: str | None = Query(None, alias="date"), branch_id: str | None = None,
+                         user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Day register for the branches the caller may view: every scheduled staff shift, absent / holiday / week off filled in."""
+    acc = await load_access(db, user, workspace_id)
+    ids = await _scope(db, acc, branch_id, "gym.attendance.view")
+    try:
+        d = date.fromisoformat(date_) if date_ else _today()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Date must look like 2026-11-22")
+    if d > _today():
+        raise HTTPException(status_code=400, detail="Pick today or an earlier date")
+    now = now_tz()
+    items = [{**_att_out(r, now), "can_correct": _can_correct(acc, r, user)} for r in await _att_rows(db, ids, d, d)]
+    items.sort(key=lambda o: (o["start_time"], o["name"]))
+    return {"date": d.isoformat(), "items": items, "counts": _counts(items)}
+
+
+@router.get("/staff-attendance/summary")
+async def staff_month_summary(workspace_id: str, month: str | None = None, branch_id: str | None = None,
+                              user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    acc = await load_access(db, user, workspace_id)
+    ids = await _scope(db, acc, branch_id, "gym.attendance.view")
+    d1, d2, label = _month_range(month)
+    now = now_tz()
+    people: dict[str, dict] = {}
+    for r in (await _att_rows(db, ids, d1, d2) if d1 <= d2 else []):
+        o = _att_out(r, now)
+        p = people.setdefault(o["member_id"], {"member_id": o["member_id"], "name": o["name"], "role_name": o["role_name"],
+                                               "branch_name": o["branch_name"], "items": []})
+        p["items"].append(o)
+    staff = [{**{k: v for k, v in p.items() if k != "items"}, "counts": _counts(p["items"])} for p in people.values()]
+    staff.sort(key=lambda p: p["name"])
+    return {"month": label, "staff": staff}
+
+
+class CorrectRequest(BaseModel):
+    member_id: str
+    shift_id: str
+    work_date: date
+    status: str = Field(..., pattern="^(present|late|half_day|absent)$")
+    check_in: str | None = Field(None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+    check_out: str | None = Field(None, pattern=r"^([01][0-9]|2[0-3]):[0-5][0-9]$")
+    note: str = Field(..., min_length=3, max_length=300)
+
+    @model_validator(mode="after")
+    def check(self):
+        if self.check_out and not self.check_in:
+            raise ValueError("Enter the check-in time too")
+        if self.check_in and self.check_out and self.check_out <= self.check_in:
+            raise ValueError("Check-out must be after check-in")
+        return self
+
+
+@router.post("/staff-attendance/correct")
+async def correct_attendance(workspace_id: str, req: CorrectRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Owner / manager fixes one shift-day. Rank rule, never yourself, never a future day, a note is required."""
+    acc = await load_access(db, user, workspace_id)
+    mid, sid = _uuid(req.member_id, "Staff member"), _uuid(req.shift_id, "Shift")
+    t = (await db.execute(text(
+        f"SELECT wm.id, wm.branch_id, wm.user_id, r.rank FROM {S}workspace_members wm JOIN {S}module_roles r ON r.id = wm.role_id "
+        "WHERE wm.id = :m AND wm.workspace_id = :w AND r.is_staff AND wm.status = 'active'"),
+        {"m": mid, "w": acc.workspace.id})).mappings().first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    if not acc.can("gym.staff_attendance.correct", t["branch_id"]):
+        raise HTTPException(status_code=403, detail="You do not have permission for this action")
+    if t["user_id"] == user.id:
+        raise HTTPException(status_code=400, detail="You cannot correct your own attendance")
+    if not acc.is_owner and t["rank"] <= acc.best_role.rank:
+        raise HTTPException(status_code=403, detail="You can only correct staff below your own role")
+    now = now_tz()
+    if req.work_date > now.date():
+        raise HTTPException(status_code=400, detail="You cannot mark a future day")
+    shift = (await db.execute(text(
+        f"SELECT s.name FROM {S}gym_shift_assignments sa JOIN {S}gym_shifts s ON s.id = sa.shift_id "
+        "WHERE sa.workspace_member_id = :m AND sa.shift_id = :s AND s.branch_id = :b AND sa.effective_from <= :d "
+        "AND (sa.effective_to IS NULL OR sa.effective_to >= :d) LIMIT 1"),
+        {"m": mid, "s": sid, "b": t["branch_id"], "d": req.work_date})).scalar_one_or_none()
+    if not shift:
+        raise HTTPException(status_code=400, detail="This shift was not assigned to them on that day")
+    tz = now.tzinfo
+    cin = datetime.combine(req.work_date, time.fromisoformat(req.check_in), tz) if req.check_in else None
+    cout = datetime.combine(req.work_date, time.fromisoformat(req.check_out), tz) if req.check_out else None
+    if (cin and cin > now) or (cout and cout > now):
+        raise HTTPException(status_code=400, detail="Times cannot be in the future")
+    old = (await db.execute(text(
+        f"SELECT status FROM {S}gym_staff_attendance WHERE workspace_member_id = :m AND shift_id = :s AND work_date = :d"),
+        {"m": mid, "s": sid, "d": req.work_date})).scalar_one_or_none()
+    att_id = (await db.execute(text(
+        f"INSERT INTO {S}gym_staff_attendance (branch_id, workspace_member_id, shift_id, work_date, check_in_at, check_out_at, status, "
+        "corrected_by, correction_note) VALUES (:b, :m, :s, :d, :cin, :cout, :st, :u, :note) "
+        "ON CONFLICT (workspace_member_id, shift_id, work_date) DO UPDATE SET "
+        f"check_in_at = COALESCE(EXCLUDED.check_in_at, {S}gym_staff_attendance.check_in_at), "
+        f"check_out_at = COALESCE(EXCLUDED.check_out_at, {S}gym_staff_attendance.check_out_at), "
+        "status = EXCLUDED.status, corrected_by = EXCLUDED.corrected_by, correction_note = EXCLUDED.correction_note, updated_at = now() "
+        "RETURNING id"),
+        {"b": t["branch_id"], "m": mid, "s": sid, "d": req.work_date, "cin": cin, "cout": cout, "st": req.status,
+         "u": user.id, "note": req.note.strip()})).scalar_one()
+    audit(db, user, "staff_attendance.corrected", "gym_staff_attendance", att_id, acc.workspace.id,
+          {"work_date": req.work_date.isoformat(), "shift": shift, "old_status": old, "new_status": req.status, "note": req.note.strip()})
+    await notify_users(db, [t["user_id"]], category="attendance", title=f"{acc.workspace.name}: attendance updated",
+                       message=f"{shift} on {req.work_date.strftime('%d %b %Y')} marked {_STATUS_LABEL[req.status]}. Note: {req.note.strip()}",
+                       workspace_id=acc.workspace.id, branch_id=t["branch_id"], actor_id=user.id)
+    await db.commit()
+    return {"status": req.status, "id": str(att_id)}
+#Added By Nikhil 22Nov26 14:41 For staff self check-in + shift attendance (register, month summary, corrections) END
