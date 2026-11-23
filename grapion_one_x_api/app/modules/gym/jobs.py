@@ -3,7 +3,8 @@
 
 A member visit is "forgotten" when it is still open and either started on an earlier day, or today's closing time
 of that branch has passed. The member gets ONE bell + push per visit (dedupe key); the visit stays open — the member
-checks out from the app. Triggered when the member opens the app, and by POST /api/v1/jobs/forgot-checkout (called by
+checks out from the app. Triggered by POST /api/v1/jobs/forgot-checkout (called by
+(Modified By Nikhil 23Nov26 17:20 For no writes on a GET. Old: "Triggered when the member opens the app, and by ...")
 an external scheduler with the X-Cron-Key header, e.g. every 30 minutes). No secret = endpoint disabled.
 """
 import hmac

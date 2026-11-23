@@ -96,6 +96,7 @@ class MyShiftCard extends StatefulWidget {
 
 class _MyShiftCardState extends State<MyShiftCard> {
   List<Map<String, dynamic>>? _shifts;
+  Map<String, dynamic>? _now; //Added By Nikhil 23Nov26 17:20 For one action + one status line from the server
   bool _busy = false;
 
   String get _base => '/gym/${widget.workspaceId}';
@@ -109,7 +110,11 @@ class _MyShiftCardState extends State<MyShiftCard> {
   Future<void> _load() async {
     final d = await gymGet(context, '$_base/me/today');
     if (!mounted || d == null) return;
-    setState(() => _shifts = ((d['shifts'] as List?) ?? []).cast<Map<String, dynamic>>());
+    //Modified By Nikhil 23Nov26 17:20 For now_action. Old: setState(() => _shifts = ...);
+    setState(() {
+      _shifts = ((d['shifts'] as List?) ?? []).cast<Map<String, dynamic>>();
+      _now = d['now_action'] as Map<String, dynamic>?;
+    });
   }
 
   Future<void> _act(String what, [String? shiftId, bool needsLocation = false]) async { //Modified By Nikhil 22Nov26 20:53 For location check-in. Old: ([String? shiftId])
@@ -137,6 +142,41 @@ class _MyShiftCardState extends State<MyShiftCard> {
     }
   }
 
+  //Added By Nikhil 23Nov26 17:20 For one status line + one Check In / Check Out (server decides which shift) START
+  List<Widget> _nowAction(List<Map<String, dynamic>> shifts) {
+    final n = _now ?? const <String, dynamic>{};
+    final action = n['action'] as String? ?? 'none';
+    final shift = shifts.where((s) => s['shift_id'] == n['shift_id']).firstOrNull;
+    return [
+      if (n['warning'] != null)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text('⚠️ ${n['warning']}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppTheme.warningOrange)),
+        ),
+      Row(
+        children: [
+          Expanded(
+            child: Text('${n['message'] ?? (shifts.isEmpty ? 'No shift today' : '')}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.label)),
+          ),
+          if (action == 'checkout' && shift != null) attendanceChip(shift),
+        ],
+      ),
+      if (action != 'none') ...[
+        const SizedBox(height: 12),
+        PillButton(
+          label: '${n['label'] ?? (action == 'checkout' ? 'Check Out' : 'Check In')}',
+          variant: action == 'checkout' ? PillVariant.secondary : PillVariant.accent,
+          padding: const EdgeInsets.all(12),
+          fontSize: 13,
+          loading: _busy,
+          onPressed: _busy ? null : () => _act(action, n['shift_id'] as String?, n['location_required'] == true),
+        ),
+      ],
+    ];
+  }
+  //Added By Nikhil 23Nov26 17:20 For one status line + one Check In / Check Out END
+
   @override
   Widget build(BuildContext context) {
     final shifts = _shifts;
@@ -155,47 +195,53 @@ class _MyShiftCardState extends State<MyShiftCard> {
               ),
             ],
           ),
+          //Added By Nikhil 23Nov26 17:20 For one status line + one Check In / Check Out (server decides; shifts list moved to Profile → My Shifts) START
           const SizedBox(height: 10),
-          if (shifts.isEmpty)
-            const Text('No shift today.', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))
-          else
-            for (final s in shifts) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${s['shift_name']} • ${time12(s['start_time'])} – ${time12(s['end_time'])}',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                        Text(
-                          [
-                            if (_inOut(s).isNotEmpty) _inOut(s),
-                            if (s['status'] == 'pending' && s['can_check_in'] != true) 'Check-in opens at ${time12(s['check_in_opens'])}',
-                            if (s['holiday'] != null) '🏖️ ${s['holiday']}',
-                            if (s['check_in_closed'] == true) 'Check-in closed — shift ended at ${time12(s['end_time'])}', //Added By Nikhil 22Nov26 23:41 For why there is no Check In button after the shift
-                          ].join(' • '),
-                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  attendanceChip(s),
-                ],
-              ),
-              if (s['can_check_in'] == true || s['can_check_out'] == true) ...[
-                const SizedBox(height: 10),
-                PillButton(
-                  label: s['can_check_out'] == true ? 'Check Out' : (s['extra_day'] == true ? 'Check In (extra day)' : 'Check In'), //Modified By Nikhil 22Nov26 20:53 For week-off extra day. Old: ... : 'Check In',
-                  variant: s['can_check_out'] == true ? PillVariant.secondary : PillVariant.accent,
-                  padding: const EdgeInsets.all(12),
-                  fontSize: 13,
-                  loading: _busy,
-                  onPressed: _busy ? null : () => _act(s['can_check_out'] == true ? 'checkout' : 'checkin', s['shift_id'] as String, s['location_required'] == true), //Modified By Nikhil 22Nov26 20:53 For location check-in. Old: (..., s['shift_id'] as String)
-                ),
-              ],
-              const SizedBox(height: 10),
-            ],
+          ..._nowAction(shifts),
+          //Added By Nikhil 23Nov26 17:20 For one status line + one Check In / Check Out END
+          //Removed By Nikhil 23Nov26 17:20 For every shift with its own button (now Profile → My Shifts) START
+          //const SizedBox(height: 10),
+          //if (shifts.isEmpty)
+          //const Text('No shift today.', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))
+          //else
+          //for (final s in shifts) ...[
+          //Row(
+          //children: [
+          //Expanded(
+          //child: Column(
+          //crossAxisAlignment: CrossAxisAlignment.start,
+          //children: [
+          //Text('${s['shift_name']} • ${time12(s['start_time'])} – ${time12(s['end_time'])}',
+          //style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          //Text(
+          //[
+          //if (_inOut(s).isNotEmpty) _inOut(s),
+          //if (s['status'] == 'pending' && s['can_check_in'] != true) 'Check-in opens at ${time12(s['check_in_opens'])}',
+          //if (s['holiday'] != null) '🏖️ ${s['holiday']}',
+          //if (s['check_in_closed'] == true) 'Check-in closed — shift ended at ${time12(s['end_time'])}', //Added By Nikhil 22Nov26 23:41 For why there is no Check In button after the shift
+          //].join(' • '),
+          //style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+          //),
+          //],
+          //),
+          //),
+          //attendanceChip(s),
+          //],
+          //),
+          //if (s['can_check_in'] == true || s['can_check_out'] == true) ...[
+          //const SizedBox(height: 10),
+          //PillButton(
+          //label: s['can_check_out'] == true ? 'Check Out' : (s['extra_day'] == true ? 'Check In (extra day)' : 'Check In'), //Modified By Nikhil 22Nov26 20:53 For week-off extra day. Old: ... : 'Check In',
+          //variant: s['can_check_out'] == true ? PillVariant.secondary : PillVariant.accent,
+          //padding: const EdgeInsets.all(12),
+          //fontSize: 13,
+          //loading: _busy,
+          //onPressed: _busy ? null : () => _act(s['can_check_out'] == true ? 'checkout' : 'checkin', s['shift_id'] as String, s['location_required'] == true), //Modified By Nikhil 22Nov26 20:53 For location check-in. Old: (..., s['shift_id'] as String)
+          //),
+          //],
+          //const SizedBox(height: 10),
+          //],
+          //Removed By Nikhil 23Nov26 17:20 For every shift with its own button (now Profile → My Shifts) END
         ],
       ),
     );
@@ -253,6 +299,77 @@ class _MyAttendanceScreenState extends State<MyAttendanceScreen> {
     );
   }
 }
+
+//Added By Nikhil 23Nov26 17:20 For Profile → My Shifts (own current + upcoming shift assignments) START
+class MyShiftsScreen extends StatefulWidget {
+  const MyShiftsScreen({super.key, required this.workspaceId, this.gymName});
+  final String workspaceId;
+  final String? gymName;
+
+  @override
+  State<MyShiftsScreen> createState() => _MyShiftsScreenState();
+}
+
+class _MyShiftsScreenState extends State<MyShiftsScreen> {
+  List<Map<String, dynamic>>? _shifts;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final d = await gymGet(context, '/gym/${widget.workspaceId}/me/shifts');
+    if (mounted) setState(() => _shifts = ((d?['shifts'] as List?) ?? []).cast<Map<String, dynamic>>());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = _shifts;
+    return GymPage(
+      title: 'My Shifts',
+      subtitle: widget.gymName ?? 'Shifts assigned to you',
+      onRefresh: _load,
+      children: [
+        if (list == null)
+          gymLoading
+        else if (list.isEmpty)
+          gymEmpty('No shift assigned to you yet. Ask your manager.')
+        else
+          for (final s in list)
+            DocCard(
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  const Text('🕘', style: TextStyle(fontSize: 22)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${s['shift_name']} • ${time12(s['start_time'])} – ${time12(s['end_time'])}',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+                        Text('${weekdaysLabel(s['weekdays'] as List)} • ${s['branch_name']}',
+                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                        Text(s['to'] == null ? 'From ${niceDate(s['from'])}' : '${niceDate(s['from'])} → ${niceDate(s['to'])}',
+                            style: const TextStyle(fontSize: 11, color: AppTheme.label)),
+                      ],
+                    ),
+                  ),
+                  if (s['upcoming'] == true)
+                    const StatusChip('Starts later', bg: Color(0xFFEFF6FF), fg: AppTheme.accentBlue, fontSize: 10)
+                  else if (s['active'] == false)
+                    const StatusChip('Paused', bg: AppTheme.chipBg, fg: AppTheme.textMuted, fontSize: 10),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+}
+//Added By Nikhil 23Nov26 17:20 For Profile → My Shifts END
 
 class _AttendanceRow extends StatelessWidget {
   const _AttendanceRow({required this.item, required this.title, required this.sub, this.onTap});

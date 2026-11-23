@@ -1460,15 +1460,104 @@ async def _my_items(db: AsyncSession, acc: Access, d1: date, d2: date) -> list[t
     return out
 
 
+#Added By Nikhil 23Nov26 17:20 For one Check In / Check Out with one status line on the staff home START
+def _hm12(hm: str | None) -> str:
+    """'17:05' → '5:05 PM' (server time)."""
+    if not hm:
+        return ""
+    h, m = int(hm[:2]), int(hm[3:5])
+    return f"{(h % 12) or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
+
+
+def _now_action(items: list[dict], now: datetime, missed_yesterday: list[dict]) -> dict:
+    """What the staff member can do right now: one action + one message (server clock). Same rules as /me/checkin."""
+    out = {"action": "none", "shift_id": None, "label": None, "message": "", "location_required": False, "warning": None}
+    if missed_yesterday:
+        m = missed_yesterday[0]
+        out["warning"] = (f"Check-out time was over at 11:59 PM yesterday ({m['shift_name']}) — "
+                          "ask your manager to correct it")
+    if not items:
+        out["message"] = "No shift today"
+        return out
+    working = next((o for o in items if o["working_now"]), None)
+    if working:
+        out.update(action="checkout", shift_id=working["shift_id"], label="Check Out",
+                   message=f"Checked in at {_hm12(working['check_in_at'][11:16])} • {working['shift_name']} "
+                           f"{_hm12(working['start_time'])} – {_hm12(working['end_time'])}")
+        return out
+    open_ = next((o for o in items if o["can_check_in"]), None)  # items are sorted by start time
+    if open_:
+        out.update(action="checkin", shift_id=open_["shift_id"], location_required=open_["location_required"],
+                   label="Check In (extra day)" if open_["extra_day"] else "Check In",
+                   message=f"{open_['shift_name']} {_hm12(open_['start_time'])} – {_hm12(open_['end_time'])}"
+                           + (" • today is your week off" if open_["extra_day"] else ""))
+        return out
+    hol = next((o["holiday"] for o in items if o["holiday"]), None)
+    if hol:
+        out["message"] = f"Holiday today ({hol}) — no check-in needed"
+        return out
+    hm = now.strftime("%H:%M")
+    later = [o for o in items if not o["check_in_at"] and not o["corrected"] and o["check_in_opens"] > hm]
+    done = [o for o in items if o["check_in_at"] or o["corrected"]]
+    if later:
+        nxt = min(later, key=lambda o: o["check_in_opens"])
+        word = "Next check-in" if done else "Check-in"
+        extra = " (extra day — today is your week off)" if all(o["extra_day"] for o in items) else ""
+        out["message"] = f"{word} opens at {_hm12(nxt['check_in_opens'])} • {nxt['shift_name']}{extra}"
+        return out
+    if done and len(done) == len(items):
+        last_out = max((o["check_out_at"] or "" for o in done), default="")
+        out["message"] = f"Done for today — checked out at {_hm12(last_out[11:16])}" if last_out else "Done for today"
+        return out
+    if all(o["extra_day"] for o in items):
+        out["message"] = "Week off today"
+        return out
+    last_end = max(o["end_time"] for o in items if not (o["check_in_at"] or o["corrected"]))
+    out["message"] = f"Check-in time is over — shift ended at {_hm12(last_end)}"
+    return out
+#Added By Nikhil 23Nov26 17:20 For one Check In / Check Out with one status line on the staff home END
+
+
 @router.get("/me/today")
 async def my_today(workspace_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """The caller's own shifts today (staff roles only) with what they may do now."""
     acc = await load_access(db, user, workspace_id)
     today = _today()
-    items = [o for _, o in await _my_items(db, acc, today, today)]
+    #Modified By Nikhil 23Nov26 17:20 For now_action + yesterday's missed check-out. Old: items = [o for _, o in await _my_items(db, acc, today, today)]
+    both = [o for _, o in await _my_items(db, acc, today - timedelta(days=1), today)]
+    items = [o for o in both if o["work_date"] == today.isoformat()]
+    missed = [o for o in both if o["work_date"] != today.isoformat() and o["status"] == "missed_checkout"]
     items.sort(key=lambda o: o["start_time"])
     return {"today": today.isoformat(), "now": now_tz().isoformat(), "is_staff": any(r.role.is_staff for r in acc.roles),
-            "checkin_early_minutes": CHECKIN_EARLY_MIN, "shifts": items}
+            "checkin_early_minutes": CHECKIN_EARLY_MIN, "shifts": items,
+            "now_action": _now_action(items, now_tz(), missed)}  #Added By Nikhil 23Nov26 17:20 For one Check In / Check Out on the staff home
+
+
+#Added By Nikhil 23Nov26 17:20 For Profile → My Shifts (own assignments only) START
+@router.get("/me/shifts")
+async def my_shifts(workspace_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """The caller's own shift assignments that are current or upcoming (staff roles only, server date)."""
+    acc = await load_access(db, user, workspace_id)
+    mine = [r.id for r in acc.roles if r.role.is_staff and r.branch_id]
+    if not mine:
+        return {"shifts": []}
+    today = _today()
+    rows = (await db.execute(text(f"""
+        SELECT s.id, s.name, s.start_time, s.end_time, s.weekdays, s.status, b.name AS branch_name,
+               sa.effective_from, sa.effective_to
+          FROM {S}gym_shift_assignments sa
+          JOIN {S}gym_shifts s ON s.id = sa.shift_id
+          JOIN {S}workspace_members wm ON wm.id = sa.workspace_member_id AND wm.status = 'active'
+          JOIN {S}workspace_branches b ON b.id = wm.branch_id
+         WHERE sa.workspace_member_id = ANY(:m) AND (sa.effective_to IS NULL OR sa.effective_to >= :t)
+         ORDER BY s.start_time, sa.effective_from"""), {"m": mine, "t": today})).mappings().all()
+    return {"today": today.isoformat(), "shifts": [{
+        "shift_id": str(r["id"]), "shift_name": r["name"], "start_time": _t(r["start_time"]), "end_time": _t(r["end_time"]),
+        "weekdays": list(r["weekdays"] or []), "branch_name": r["branch_name"], "active": r["status"] == "active",
+        "from": r["effective_from"].isoformat(), "to": r["effective_to"].isoformat() if r["effective_to"] else None,
+        "upcoming": r["effective_from"] > today,
+    } for r in rows]}
+#Added By Nikhil 23Nov26 17:20 For Profile → My Shifts (own assignments only) END
 
 
 class MyCheckRequest(GeoRequest):  #Modified By Nikhil 22Nov26 20:53 For location check-in. Old: class MyCheckRequest(BaseModel):
@@ -1747,10 +1836,12 @@ async def my_member_home(workspace_id: str, user: User = Depends(get_current_use
     #Added By Nikhil 22Nov26 18:05 For "you forgot to check out" (reminder sent once; the visit stays open) START
     forgot = bool(inside and (visit["check_in_at"].astimezone(tz).date() < today
                               or (rules["close"] and now_tz().strftime("%H:%M") >= rules["close"])))
-    if forgot:
-        from app.modules.gym.jobs import notify_forgot_checkouts
-        if await notify_forgot_checkouts(db, p["id"]):
-            await db.commit()
+    #Removed By Nikhil 23Nov26 17:20 For no writes on a GET (the 30-min cron job sends the reminder) START
+    #if forgot:
+    #    from app.modules.gym.jobs import notify_forgot_checkouts
+    #    if await notify_forgot_checkouts(db, p["id"]):
+    #        await db.commit()
+    #Removed By Nikhil 23Nov26 17:20 For no writes on a GET (the 30-min cron job sends the reminder) END
     #Added By Nikhil 22Nov26 18:05 For "you forgot to check out" (reminder sent once; the visit stays open) END
     return {
         "forgot_checkout": forgot,  #Added By Nikhil 22Nov26 18:05 For "you forgot to check out"

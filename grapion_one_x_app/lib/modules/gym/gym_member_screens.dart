@@ -90,6 +90,7 @@ class _MemberHomeSectionState extends State<MemberHomeSection> {
           gradient: const LinearGradient(colors: [AppTheme.pillDark, Color(0xFF1E293B)]),
           borderColor: AppTheme.pillDark,
           padding: const EdgeInsets.all(18),
+          onTap: () => _open(MyMembershipScreen(workspaceId: widget.workspaceId)), //Added By Nikhil 23Nov26 17:20 For Home card → same page as Profile → My Membership
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -125,6 +126,10 @@ class _MemberHomeSectionState extends State<MemberHomeSection> {
                   child: Text('Next: ${upcoming.first['plan_name']} from ${_day(upcoming.first['start_date'])}',
                       style: const TextStyle(fontSize: 11, color: Colors.white70)),
                 ),
+              const Padding( //Added By Nikhil 23Nov26 17:20 For showing the card opens My Membership
+                padding: EdgeInsets.only(top: 8),
+                child: Text('View membership details →', style: TextStyle(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w700)),
+              ),
             ],
           ),
         ),

@@ -13,6 +13,8 @@ import '../subscription/store_screen.dart';
 import '../../widgets/announcement_banner.dart'; //Added By Nikhil 22Nov26 08:35 For Help & support card
 import 'edit_profile_screen.dart'; //Added By Nikhil 22Nov26 17:36 For Edit Profile page + initials avatar
 import 'package:package_info_plus/package_info_plus.dart'; //Added By Nikhil 22Nov26 23:30 For installed app version footer
+import '../../modules/gym/gym_attendance.dart' show MyShiftsScreen, MyAttendanceScreen; //Added By Nikhil 23Nov26 17:20 For Profile → MY WORK
+import '../../modules/gym/gym_member_screens.dart' show MyMembershipScreen, MemberPaymentsScreen, MyVisitsScreen, RenewScreen; //Added By Nikhil 23Nov26 17:20 For Profile → membership menus
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -109,9 +111,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _loading = false;
       });
       //Added By Nikhil 22Nov26 17:36 For member membership expiry on the profile START
-      for (final e in _entries.where((e) => e['role_code'] == 'member' && e['active'] != false && e['workspace_id'] != null)) {
-        final res = await apiClient.get('/gym/${e['workspace_id']}/me/member');
-        if (res.statusCode == 200 && mounted) setState(() => _memberHome[e['workspace_id'] as String] = jsonDecode(res.body) as Map<String, dynamic>);
+      //Modified By Nikhil 23Nov26 17:20 For loading every gym at once (C4). Old: for (...) { final res = await apiClient.get(...); ... }
+      final gyms = _entries.where((e) => e['role_code'] == 'member' && e['active'] != false && e['workspace_id'] != null).map((e) => e['workspace_id'] as String).toList();
+      final homes = await Future.wait(gyms.map((ws) => apiClient.get('/gym/$ws/me/member')));
+      if (mounted) {
+        setState(() {
+          for (var i = 0; i < gyms.length; i++) {
+            if (homes[i].statusCode == 200) _memberHome[gyms[i]] = jsonDecode(homes[i].body) as Map<String, dynamic>;
+          }
+        });
       }
       //Added By Nikhil 22Nov26 17:36 For member membership expiry on the profile END
     } catch (_) {
@@ -350,7 +358,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               else ...[
                 //Modified By Nikhil 22Nov26 17:36 For avatar + Edit Profile, modules only for owners, gym membership for members. Old: MY SUBSCRIPTIONS (always) + PERSONAL DETAILS form
                 _profileHeader(),
-                if (_isGymPersonOnly) ..._gymSections() else ...[
+                ..._gymSections(), //Added By Nikhil 23Nov26 17:20 For membership / work menus for every member and staff role (also owners with modules)
+                //Modified By Nikhil 23Nov26 17:20 For gym menus always shown. Old: if (_isGymPersonOnly) ..._gymSections() else ...[
+                if (!_isGymPersonOnly) ...[
                   _sectionLabel('MY SUBSCRIPTIONS'),
                   _buildSubscriptions(),
                   const SizedBox(height: 6),
@@ -449,9 +459,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return [
       if (members.isNotEmpty) ...[
         _sectionLabel('MY GYM MEMBERSHIP'),
-        for (final e in members) _membershipCard(e),
+        //Modified By Nikhil 23Nov26 17:20 For membership menu rows under each gym. Old: for (final e in members) _membershipCard(e),
+        for (final e in members) ...[
+          _membershipCard(e),
+          if (e['active'] != false && e['workspace_id'] != null) ...[
+            _menuRow('🎫', 'My Membership', 'Plan, dates, paid & history', MyMembershipScreen(workspaceId: e['workspace_id'] as String)),
+            _menuRow('🧾', 'Payments & Receipts', 'What you paid, verified or pending', MemberPaymentsScreen(workspaceId: e['workspace_id'] as String)),
+            _menuRow('📅', 'My Visits', 'Check-in history by month', MyVisitsScreen(workspaceId: e['workspace_id'] as String)),
+            _menuRow('🔁', 'Renew Membership', 'Pay the gym by UPI and confirm here', RenewScreen(workspaceId: e['workspace_id'] as String)),
+          ],
+        ],
         const SizedBox(height: 6),
       ],
+      //Added By Nikhil 23Nov26 17:20 For Profile → MY WORK (shifts + attendance) for manager / receptionist / trainer START
+      for (final e in staff.where((e) => e['module_code'] == 'gym' && e['active'] != false && e['workspace_id'] != null)) ...[
+        _sectionLabel(staff.length > 1 ? 'MY WORK • ${e['workspace_name'] ?? ''}' : 'MY WORK'),
+        _menuRow('🕘', 'My Shifts', 'Shifts assigned to you: time, days, branch', MyShiftsScreen(workspaceId: e['workspace_id'] as String, gymName: e['workspace_name'] as String?)),
+        _menuRow('🕒', 'My Attendance', 'Your check-ins and check-outs by month', MyAttendanceScreen(workspaceId: e['workspace_id'] as String)),
+        const SizedBox(height: 6),
+      ],
+      //Added By Nikhil 23Nov26 17:20 For Profile → MY WORK END
       if (staff.isNotEmpty) ...[
         _sectionLabel('MY GYM'),
         for (final e in staff)
@@ -530,6 +557,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
+  //Added By Nikhil 23Nov26 17:20 For Profile menu rows (membership, shifts, attendance) START
+  Widget _menuRow(String icon, String title, String sub, Widget screen) => DocCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        margin: const EdgeInsets.only(bottom: 8),
+        onTap: () => Navigator.of(context).push(docRoute(screen)).then((_) {
+          if (mounted) _load();
+        }),
+        child: Row(
+          children: [
+            Text(icon, style: const TextStyle(fontSize: 18)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                  Text(sub, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppTheme.textSubtle),
+          ],
+        ),
+      );
+  //Added By Nikhil 23Nov26 17:20 For Profile menu rows END
 
   /// "2026-12-22" → "22 Dec 2026".
   static String niceDay(String iso) => formatServerDateTime('${iso.substring(0, 10)}T00:00:00', withTime: false);

@@ -86,7 +86,8 @@ class _GymViewAsScreenState extends State<GymViewAsScreen> {
             ),
           ),
           _option('👑', 'View as Owner', _needsSetup ? 'Set up the demo gym, then use the owner dashboard' : 'Dashboard, members, staff, shifts, payments', _asOwner),
-          _option('🏋️', 'View as Member', 'What a gym member sees', _asMember, dim: _needsSetup),
+          //Modified By Nikhil 23Nov26 17:20 For note that Profile stays your admin account. Old: 'What a gym member sees'
+          _option('🏋️', 'View as Member', 'What a gym member sees • Profile still shows your admin account', _asMember, dim: _needsSetup),
         ],
       ],
     );
